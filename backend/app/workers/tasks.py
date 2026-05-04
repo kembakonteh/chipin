@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from decimal import Decimal
@@ -6,10 +7,11 @@ from typing import Optional
 import httpx
 from arq.connections import RedisSettings
 from sqlalchemy import func, select
+from sqlalchemy import nullslast
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.models.campaign import Campaign
+from app.models.campaign import Campaign, VisibilityMode
 from app.models.contributor import Contributor
 from app.models.user import User
 
@@ -75,14 +77,10 @@ async def send_whatsapp_confirmation(ctx, *, contributor_id: Optional[str]) -> N
 
 
 async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
-    """Notify the organizer with updated total raised after a new card payment."""
+    """Publish live stats to Redis SSE channel and optionally notify the organizer via WhatsApp."""
     async with AsyncSessionLocal() as db:
         campaign = await db.get(Campaign, uuid.UUID(campaign_id))
-        if not campaign or not campaign.whatsapp_reminders_enabled:
-            return
-
-        owner = await db.get(User, campaign.owner_id)
-        if not owner or not owner.phone:
+        if not campaign:
             return
 
         total_result = await db.execute(
@@ -92,6 +90,7 @@ async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
             )
         )
         total = total_result.scalar_one_or_none() or Decimal("0")
+
         paid_count_result = await db.execute(
             select(func.count()).where(
                 Contributor.campaign_id == campaign.id,
@@ -100,14 +99,54 @@ async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
         )
         paid_count = paid_count_result.scalar_one()
 
-        await _send_whatsapp(
-            owner.phone,
-            (
-                f"💰 New card payment on '{campaign.title}'! "
-                f"{paid_count} paid — total raised: {campaign.currency} {total:.2f} "
-                f"/ {campaign.currency} {campaign.goal_amount:.2f}"
-            ),
+        contributor_count_result = await db.execute(
+            select(func.count()).where(Contributor.campaign_id == campaign.id)
         )
+        contributor_count = contributor_count_result.scalar_one()
+
+        latest_result = await db.execute(
+            select(Contributor)
+            .where(Contributor.campaign_id == campaign.id, Contributor.paid.is_(True))
+            .order_by(nullslast(Contributor.paid_at.desc()))
+            .limit(1)
+        )
+        latest = latest_result.scalar_one_or_none()
+
+        if latest:
+            if latest.is_anonymous:
+                latest_payer: Optional[str] = "Anonymous"
+            elif campaign.visibility_mode == VisibilityMode.full_name:
+                latest_payer = latest.name
+            elif campaign.visibility_mode == VisibilityMode.first_name_only:
+                latest_payer = latest.name.split()[0]
+            else:
+                latest_payer = "Anonymous"
+        else:
+            latest_payer = None
+
+        goal = campaign.goal_amount
+        progress_pct = round(min(float(total / goal) * 100, 100.0), 2) if goal > 0 else 0.0
+
+        payload = json.dumps({
+            "total_raised": str(total),
+            "paid_count": paid_count,
+            "contributor_count": contributor_count,
+            "latest_payer_display_name": latest_payer,
+            "progress_pct": progress_pct,
+        })
+        await ctx["redis"].publish(f"chipin:campaign:{campaign_id}", payload)
+
+        if campaign.whatsapp_reminders_enabled:
+            owner = await db.get(User, campaign.owner_id)
+            if owner and owner.phone:
+                await _send_whatsapp(
+                    owner.phone,
+                    (
+                        f"💰 New card payment on '{campaign.title}'! "
+                        f"{paid_count} paid — total raised: {campaign.currency} {total:.2f} "
+                        f"/ {campaign.currency} {campaign.goal_amount:.2f}"
+                    ),
+                )
 
 
 # ---------------------------------------------------------------------------

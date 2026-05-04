@@ -1,11 +1,19 @@
+import asyncio
+import contextlib
+import json
 from decimal import Decimal
+from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
+from sqlalchemy import nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core import sse_manager
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_arq
+from app.core.redis_client import get_redis
 from app.models.campaign import Campaign, CampaignStatus, VisibilityMode
 from app.models.contributor import Contributor
 from app.models.user import User
@@ -14,7 +22,11 @@ from app.schemas.contributor import (
     JoinCampaignResponse,
     MembershipResponse,
 )
-from app.schemas.public import PublicCampaignResponse, PublicContributorItem
+from app.schemas.public import (
+    CampaignStatsResponse,
+    PublicCampaignResponse,
+    PublicContributorItem,
+)
 
 router = APIRouter(tags=["public"])
 
@@ -32,6 +44,54 @@ def _resolve_display_name(name: str, is_anonymous: bool, visibility_mode: Visibi
         return name.split()[0]
     # anonymous mode
     return "Anonymous"
+
+
+async def _fetch_stats(db: AsyncSession, campaign: Campaign) -> CampaignStatsResponse:
+    total_result = await db.execute(
+        select(func.sum(Contributor.amount)).where(
+            Contributor.campaign_id == campaign.id,
+            Contributor.paid.is_(True),
+        )
+    )
+    total = total_result.scalar_one_or_none() or Decimal("0")
+
+    paid_count_result = await db.execute(
+        select(func.count()).where(
+            Contributor.campaign_id == campaign.id,
+            Contributor.paid.is_(True),
+        )
+    )
+    paid_count = paid_count_result.scalar_one()
+
+    contributor_count_result = await db.execute(
+        select(func.count()).where(Contributor.campaign_id == campaign.id)
+    )
+    contributor_count = contributor_count_result.scalar_one()
+
+    latest_result = await db.execute(
+        select(Contributor)
+        .where(Contributor.campaign_id == campaign.id, Contributor.paid.is_(True))
+        .order_by(nullslast(Contributor.paid_at.desc()))
+        .limit(1)
+    )
+    latest = latest_result.scalar_one_or_none()
+
+    latest_payer: Optional[str] = (
+        _resolve_display_name(latest.name, latest.is_anonymous, campaign.visibility_mode)
+        if latest
+        else None
+    )
+
+    goal = campaign.goal_amount
+    progress_pct = round(min(float(total / goal) * 100, 100.0), 2) if goal > 0 else 0.0
+
+    return CampaignStatsResponse(
+        total_raised=total,
+        paid_count=paid_count,
+        contributor_count=contributor_count,
+        latest_payer_display_name=latest_payer,
+        progress_pct=progress_pct,
+    )
 
 
 @router.get("/p/{slug}", response_model=PublicCampaignResponse)
@@ -80,6 +140,77 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         paid_count=paid_count,
         contributors=public_contributors,
         status=campaign.status,
+    )
+
+
+@router.get("/p/{slug}/stats", response_model=CampaignStatsResponse)
+async def campaign_stats(slug: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Campaign).where(Campaign.slug == slug))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    return await _fetch_stats(db, campaign)
+
+
+@router.get("/p/{slug}/stream")
+async def campaign_stream(slug: str, request: Request):
+    # Use a short-lived session only for the initial campaign lookup.
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Campaign).where(Campaign.slug == slug))
+        campaign = result.scalar_one_or_none()
+
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    campaign_id = str(campaign.id)
+
+    if not sse_manager.can_connect(campaign_id):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Too many live connections for this campaign",
+        )
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        redis = await get_redis()
+        pubsub = redis.pubsub()
+        channel = f"chipin:campaign:{campaign_id}"
+        await pubsub.subscribe(channel)
+
+        queue: asyncio.Queue[str] = asyncio.Queue()
+
+        async def _reader() -> None:
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    await queue.put(message["data"])
+
+        reader_task = asyncio.create_task(_reader())
+        sse_manager.register(campaign_id)
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=25)
+                    yield f"event: campaign_update\ndata: {data}\n\n"
+                except asyncio.TimeoutError:
+                    yield ":\n\n"
+        finally:
+            reader_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reader_task
+            await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+            sse_manager.unregister(campaign_id)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

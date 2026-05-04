@@ -14,6 +14,14 @@ class PublicContributorItem(BaseModel):
     paid_at: Optional[datetime]
 
 
+class CampaignStatsResponse(BaseModel):
+    total_raised: Decimal
+    paid_count: int
+    contributor_count: int
+    latest_payer_display_name: Optional[str]
+    progress_pct: float
+
+
 class PublicCampaignResponse(BaseModel):
     slug: str
     title: str
