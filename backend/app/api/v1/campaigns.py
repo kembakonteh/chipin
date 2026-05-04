@@ -2,13 +2,13 @@ import math
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from slugify import slugify
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_arq, get_current_user
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.contributor import Contributor
 from app.models.org import Org, OrgMember
@@ -197,3 +197,29 @@ async def sync_org_members(
     await db.commit()
 
     return SyncOrgMembersResponse(added=len(new_contributors))
+
+
+# --- WhatsApp reminder blast ---
+
+@router.post("/{slug}/remind-all", status_code=status.HTTP_202_ACCEPTED)
+async def remind_all(
+    slug: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    arq=Depends(get_arq),
+):
+    """Enqueue a WhatsApp reminder blast for all unpaid contributors."""
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+
+    result = await db.execute(
+        select(func.count()).where(
+            Contributor.campaign_id == campaign.id,
+            Contributor.paid.is_(False),
+            Contributor.phone.isnot(None),
+        )
+    )
+    queued = min(result.scalar_one(), 50)
+
+    await arq.enqueue_job("send_reminder_blast", campaign_id=str(campaign.id))
+    return {"queued": queued}

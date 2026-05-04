@@ -14,15 +14,22 @@ from app.core.database import AsyncSessionLocal
 from app.models.campaign import Campaign, VisibilityMode
 from app.models.contributor import Contributor
 from app.models.user import User
+from app.workers.whatsapp import (
+    check_campaign_completion,
+    send_payment_confirmation,
+    send_payment_reminder,
+    send_reminder_blast,
+)
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# WhatsApp helpers
+# Legacy raw-text helper (kept for internal use only)
 # ---------------------------------------------------------------------------
 
-async def _send_whatsapp(phone: str, message: str) -> None:
+async def _send_whatsapp_text(phone: str, message: str) -> None:
+    """Send a plain-text (non-template) WhatsApp message. Internal use only."""
     if not settings.META_WHATSAPP_TOKEN or not settings.META_PHONE_NUMBER_ID:
         return
     url = f"https://graph.facebook.com/v18.0/{settings.META_PHONE_NUMBER_ID}/messages"
@@ -42,42 +49,24 @@ async def _send_whatsapp(phone: str, message: str) -> None:
             )
             resp.raise_for_status()
         except Exception as exc:
-            logger.warning("WhatsApp send failed to %s: %s", phone, exc)
+            logger.warning("WhatsApp text send failed to %s: %s", phone, exc)
 
 
 # ---------------------------------------------------------------------------
-# ARQ tasks
+# notify_organizer_whatsapp (plain text — used for join notifications)
 # ---------------------------------------------------------------------------
 
-async def notify_organizer_whatsapp(ctx, *, organizer_phone: str, message: str) -> None:
-    """Generic message to an organizer's WhatsApp number."""
-    await _send_whatsapp(organizer_phone, message)
+async def notify_organizer_whatsapp(ctx: dict, *, organizer_phone: str, message: str) -> None:
+    """Generic plain-text notification to the organiser's WhatsApp number."""
+    await _send_whatsapp_text(organizer_phone, message)
 
 
-async def send_whatsapp_confirmation(ctx, *, contributor_id: Optional[str]) -> None:
-    """Confirm a card payment to the contributor (if phone set)."""
-    if not contributor_id:
-        return
+# ---------------------------------------------------------------------------
+# broadcast_campaign_update — SSE publish + organiser WhatsApp text
+# ---------------------------------------------------------------------------
 
-    async with AsyncSessionLocal() as db:
-        contributor = await db.get(Contributor, uuid.UUID(contributor_id))
-        if not contributor or not contributor.phone:
-            return
-
-        campaign = await db.get(Campaign, contributor.campaign_id)
-        if not campaign:
-            return
-
-        display = "Anonymous" if contributor.is_anonymous else contributor.name
-        amount_str = f"{campaign.currency} {contributor.amount:.2f}"
-        await _send_whatsapp(
-            contributor.phone,
-            f"✅ Payment received! {amount_str} for '{campaign.title}'. Thank you, {display}!",
-        )
-
-
-async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
-    """Publish live stats to Redis SSE channel and optionally notify the organizer via WhatsApp."""
+async def broadcast_campaign_update(ctx: dict, *, campaign_id: str) -> None:
+    """Publish live stats to the Redis SSE channel and notify the organiser."""
     async with AsyncSessionLocal() as db:
         campaign = await db.get(Campaign, uuid.UUID(campaign_id))
         if not campaign:
@@ -89,7 +78,7 @@ async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
                 Contributor.paid.is_(True),
             )
         )
-        total = total_result.scalar_one_or_none() or Decimal("0")
+        total: Decimal = total_result.scalar_one_or_none() or Decimal("0")
 
         paid_count_result = await db.execute(
             select(func.count()).where(
@@ -112,17 +101,16 @@ async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
         )
         latest = latest_result.scalar_one_or_none()
 
+        latest_payer: Optional[str] = None
         if latest:
             if latest.is_anonymous:
-                latest_payer: Optional[str] = "Anonymous"
+                latest_payer = "Anonymous"
             elif campaign.visibility_mode == VisibilityMode.full_name:
                 latest_payer = latest.name
             elif campaign.visibility_mode == VisibilityMode.first_name_only:
                 latest_payer = latest.name.split()[0]
             else:
                 latest_payer = "Anonymous"
-        else:
-            latest_payer = None
 
         goal = campaign.goal_amount
         progress_pct = round(min(float(total / goal) * 100, 100.0), 2) if goal > 0 else 0.0
@@ -139,12 +127,12 @@ async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
         if campaign.whatsapp_reminders_enabled:
             owner = await db.get(User, campaign.owner_id)
             if owner and owner.phone:
-                await _send_whatsapp(
+                await _send_whatsapp_text(
                     owner.phone,
                     (
-                        f"💰 New card payment on '{campaign.title}'! "
-                        f"{paid_count} paid — total raised: {campaign.currency} {total:.2f} "
-                        f"/ {campaign.currency} {campaign.goal_amount:.2f}"
+                        f"💰 New payment on '{campaign.title}'! "
+                        f"{paid_count} paid — total: {campaign.currency} {total:.2f}"
+                        f" / {campaign.currency} {campaign.goal_amount:.2f}"
                     ),
                 )
 
@@ -155,10 +143,15 @@ async def broadcast_campaign_update(ctx, *, campaign_id: str) -> None:
 
 class WorkerSettings:
     functions = [
+        # Broadcast / organiser notifications
         notify_organizer_whatsapp,
-        send_whatsapp_confirmation,
         broadcast_campaign_update,
+        # Template-based WhatsApp tasks (imported from whatsapp.py)
+        send_payment_confirmation,
+        send_payment_reminder,
+        send_reminder_blast,
+        check_campaign_completion,
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     max_jobs = 10
-    job_timeout = 30
+    job_timeout = 60

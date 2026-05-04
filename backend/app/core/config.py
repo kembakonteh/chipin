@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     META_WHATSAPP_TOKEN: str = ""
     META_PHONE_NUMBER_ID: str = ""
+    META_APP_SECRET: str = ""       # App secret — used to verify X-Hub-Signature-256
+    META_VERIFY_TOKEN: str = ""     # Arbitrary token set in Meta webhook config
 
     R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY_ID: str = ""

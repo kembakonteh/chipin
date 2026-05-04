@@ -1,12 +1,12 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_arq, get_current_user
 from app.models.campaign import Campaign
 from app.models.contributor import Contributor
 from app.models.user import User
@@ -147,3 +147,29 @@ async def mark_paid(
     await db.commit()
     await db.refresh(contributor)
     return contributor
+
+
+@router.post(
+    "/campaigns/{slug}/contributors/{contributor_id}/remind",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def remind_contributor(
+    slug: str,
+    contributor_id: uuid.UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    arq=Depends(get_arq),
+):
+    """Enqueue a WhatsApp payment reminder for one unpaid contributor."""
+    campaign = await _get_campaign_scoped(slug, current_user.id, db)
+    contributor = await _get_contributor_or_404(contributor_id, campaign.id, db)
+
+    if contributor.paid:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Contributor has already paid.",
+        )
+
+    await arq.enqueue_job("send_payment_reminder", contributor_id=str(contributor.id))
+    return {"queued": 1}

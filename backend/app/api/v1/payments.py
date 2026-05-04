@@ -256,11 +256,13 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
     await db.commit()
 
     # Enqueue async notifications
-    await arq.enqueue_job(
-        "send_whatsapp_confirmation",
-        contributor_id=str(payment.contributor_id) if payment.contributor_id else None,
-    )
+    if payment.contributor_id:
+        await arq.enqueue_job(
+            "send_payment_confirmation",
+            contributor_id=str(payment.contributor_id),
+        )
     await arq.enqueue_job("broadcast_campaign_update", campaign_id=str(payment.campaign_id))
+    await arq.enqueue_job("check_campaign_completion", campaign_id=str(payment.campaign_id))
 
 
 async def _handle_payment_failed(pi_obj: dict, db: AsyncSession) -> None:
