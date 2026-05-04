@@ -1,0 +1,82 @@
+services:
+  chipin-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: chipin
+      POSTGRES_PASSWORD: chipinpass2026
+      POSTGRES_DB: chipin
+    volumes:
+      - chipin_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chipin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chipin-internal
+
+  chipin-redis:
+    image: redis:7-alpine
+    ports:
+      - "6382:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chipin-internal
+
+  chipin-backend:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://chipin:chipinpass2026@chipin-db:5432/chipin
+      REDIS_URL: redis://chipin-redis:6379/0
+      SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
+      ACCESS_TOKEN_EXPIRE_MINUTES: 480
+      ALLOWED_ORIGINS: "https://chipin.kafotech.io"
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      META_WHATSAPP_TOKEN: ""
+      META_PHONE_NUMBER_ID: ""
+      FRONTEND_URL: "https://chipin.kafotech.io"
+    depends_on:
+      chipin-db:
+        condition: service_healthy
+      chipin-redis:
+        condition: service_healthy
+    networks:
+      - chipin-internal
+      - kafotech-shared
+
+  chipin-frontend:
+    build: ./frontend
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5176:5173"
+    environment:
+      VITE_API_URL: https://chipin.kafotech.io/api
+    depends_on:
+      - chipin-backend
+    networks:
+      - chipin-internal
+      - kafotech-shared
+
+networks:
+  chipin-internal:
+    driver: bridge
+  kafotech-shared:
+    external: true
+
+volumes:
+  chipin_postgres_data:
