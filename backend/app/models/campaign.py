@@ -12,6 +12,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.contributor import Contributor
+    from app.models.org import Org
     from app.models.payment import Payment
     from app.models.user import User
 
@@ -41,6 +42,9 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id", ondelete="SET NULL"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -76,5 +80,6 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     )
 
     owner: Mapped["User"] = relationship("User", back_populates="campaigns")
+    org: Mapped[Optional["Org"]] = relationship("Org")
     contributors: Mapped[List["Contributor"]] = relationship("Contributor", back_populates="campaign")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="campaign")

@@ -1,7 +1,23 @@
+from contextlib import asynccontextmanager
+
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.limiter import limiter
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.arq = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+    yield
+    await app.state.arq.aclose()
+
 
 app = FastAPI(
     title="ChipIn API",
@@ -10,7 +26,11 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +39,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(api_router)
 
 
 @app.get("/api/health")

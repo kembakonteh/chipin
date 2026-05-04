@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -9,6 +10,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     ALGORITHM: str = "HS256"
 
     STRIPE_SECRET_KEY: str = ""
@@ -24,6 +26,16 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
     ALLOWED_ORIGINS: str = "http://localhost:5173"
+
+    # Email (SMTP via fastapi-mail)
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = "noreply@chipin.kafotech.io"
+    MAIL_FROM_NAME: str = "ChipIn"
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
 
     @property
     def origins(self) -> List[str]:
