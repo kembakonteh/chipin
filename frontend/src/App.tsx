@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import AuthVerify from './pages/AuthVerify'
 import Dashboard from './pages/Dashboard'
 import CampaignDetail from './pages/CampaignDetail'
+import PublicCampaign from './pages/PublicCampaign'
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/auth/verify" element={<AuthVerify />} />
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/dashboard/:slug" element={<Protected><CampaignDetail /></Protected>} />
+        <Route path="/p/:slug" element={<PublicCampaign />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
