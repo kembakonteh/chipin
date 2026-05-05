@@ -44,6 +44,12 @@ export default function Layout({ children }: { children: ReactNode }) {
             >
               Recurring
             </Link>
+            <Link
+              to="/susu"
+              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Susu
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

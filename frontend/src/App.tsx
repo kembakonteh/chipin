@@ -10,6 +10,10 @@ import OrgsPage from './pages/OrgsPage'
 import OrgDetail from './pages/OrgDetail'
 import PublicOrgPage from './pages/PublicOrg'
 import RecurringPage from './pages/RecurringPage'
+import SusuListPage from './pages/SusuListPage'
+import SusuCreatePage from './pages/SusuCreatePage'
+import SusuDetail from './pages/SusuDetail'
+import PublicSusu from './pages/PublicSusu'
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -39,8 +43,12 @@ export default function App() {
         <Route path="/orgs" element={<Protected><OrgsPage /></Protected>} />
         <Route path="/orgs/:slug" element={<Protected><OrgDetail /></Protected>} />
         <Route path="/recurring" element={<Protected><RecurringPage /></Protected>} />
+        <Route path="/susu" element={<Protected><SusuListPage /></Protected>} />
+        <Route path="/susu/create" element={<Protected><SusuCreatePage /></Protected>} />
+        <Route path="/susu/:slug" element={<Protected><SusuDetail /></Protected>} />
         <Route path="/p/:slug" element={<PublicCampaign />} />
         <Route path="/o/:slug" element={<PublicOrgPage />} />
+        <Route path="/s/:slug" element={<PublicSusu />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

@@ -197,7 +197,11 @@ async def stripe_webhook(
     obj = event["data"]["object"]
 
     if event_type == "checkout.session.completed":
-        await _handle_checkout_completed(obj, db, arq)
+        metadata = obj.get("metadata", {})
+        if metadata.get("susu_contribution_id"):
+            await _handle_susu_checkout_completed(obj, db)
+        else:
+            await _handle_checkout_completed(obj, db, arq)
 
     elif event_type == "payment_intent.payment_failed":
         await _handle_payment_failed(obj, db)
@@ -263,6 +267,48 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
         )
     await arq.enqueue_job("broadcast_campaign_update", campaign_id=str(payment.campaign_id))
     await arq.enqueue_job("check_campaign_completion", campaign_id=str(payment.campaign_id))
+
+
+async def _handle_susu_checkout_completed(session_obj: dict, db: AsyncSession) -> None:
+    from datetime import datetime, timezone
+    from app.models.susu import SusuContribution, SusuCycle, SusuCycleStatus, SusuMember, SusuPaidVia
+
+    metadata = session_obj.get("metadata", {})
+    contribution_id = metadata.get("susu_contribution_id")
+    if not contribution_id:
+        return
+
+    import uuid as _uuid
+    contrib_result = await db.execute(
+        select(SusuContribution).where(SusuContribution.id == _uuid.UUID(contribution_id))
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib or contrib.paid:
+        return
+
+    pi_id = session_obj.get("payment_intent")
+    contrib.paid = True
+    contrib.paid_via = SusuPaidVia.card
+    contrib.paid_at = datetime.now(timezone.utc)
+    if pi_id:
+        contrib.stripe_payment_intent_id = pi_id
+
+    # Update cycle collected_amount
+    cycle_result = await db.execute(select(SusuCycle).where(SusuCycle.id == contrib.cycle_id))
+    cycle = cycle_result.scalar_one_or_none()
+    if cycle:
+        cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
+        if cycle.collected_amount >= cycle.pot_amount:
+            cycle.status = SusuCycleStatus.collected
+
+    # Update member total_contributed
+    member_result = await db.execute(select(SusuMember).where(SusuMember.id == contrib.member_id))
+    member = member_result.scalar_one_or_none()
+    if member:
+        member.total_contributed += contrib.amount
+
+    await db.commit()
+    logger.info("Susu contribution %s marked paid via Stripe", contribution_id)
 
 
 async def _handle_payment_failed(pi_obj: dict, db: AsyncSession) -> None:

@@ -1,3 +1,75 @@
+export type SusuFrequency = 'weekly' | 'biweekly' | 'monthly'
+export type SusuStatus = 'forming' | 'active' | 'completed' | 'paused'
+export type SusuPayoutOrder = 'fixed' | 'random' | 'bid'
+export type SusuCycleStatus = 'collecting' | 'collected' | 'paid_out' | 'missed'
+export type SusuPaidVia = 'card' | 'cash' | 'zelle' | 'cashapp'
+
+export interface SusuMember {
+  id: string
+  group_id: string
+  user_id: string | null
+  name: string
+  phone: string
+  email: string | null
+  payout_position: number | null
+  has_received_payout: boolean
+  total_contributed: string
+  joined_at: string
+}
+
+export interface SusuContribution {
+  id: string
+  cycle_id: string
+  member_id: string
+  member_name: string
+  amount: string
+  paid: boolean
+  paid_via: SusuPaidVia | null
+  paid_at: string | null
+}
+
+export interface SusuCycleSummary {
+  id: string
+  cycle_number: number
+  due_date: string
+  pot_amount: string
+  collected_amount: string
+  recipient_member_id: string
+  recipient_name: string
+  payout_sent_at: string | null
+  status: SusuCycleStatus
+}
+
+export interface SusuCycleDetail extends SusuCycleSummary {
+  group_id: string
+  contributions: SusuContribution[]
+}
+
+export interface SusuGroup {
+  id: string
+  org_id: string | null
+  owner_id: string
+  name: string
+  slug: string
+  contribution_amount: string
+  frequency: SusuFrequency
+  total_members: number
+  current_cycle: number
+  total_cycles: number
+  status: SusuStatus
+  payout_order: SusuPayoutOrder
+  start_date: string
+  next_contribution_date: string | null
+  next_payout_date: string | null
+  created_at: string
+}
+
+export interface SusuDetail extends SusuGroup {
+  members: SusuMember[]
+  current_cycle_detail: SusuCycleDetail | null
+  cycle_summaries: SusuCycleSummary[]
+}
+
 export type CampaignType = 'general' | 'memorial' | 'charity' | 'celebration'
 export type VisibilityMode = 'full_name' | 'first_name_only' | 'anonymous'
 export type CampaignStatus = 'active' | 'paused' | 'completed' | 'archived'

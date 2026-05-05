@@ -1,0 +1,136 @@
+import uuid
+from datetime import date, datetime
+from decimal import Decimal
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.susu import SusuCycleStatus, SusuFrequency, SusuPaidVia, SusuPayoutOrder, SusuStatus
+
+
+class SusuGroupCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255)
+    slug: Optional[str] = Field(None, max_length=255)
+    contribution_amount: Decimal = Field(..., gt=0)
+    frequency: SusuFrequency
+    total_cycles: int = Field(..., ge=2, le=52)
+    payout_order: SusuPayoutOrder = SusuPayoutOrder.fixed
+    start_date: date
+    org_id: Optional[uuid.UUID] = None
+
+
+class SusuGroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=255)
+    payout_order: Optional[SusuPayoutOrder] = None
+
+
+class SusuMemberCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    phone: str = Field(..., min_length=7, max_length=50)
+    email: Optional[str] = Field(None, max_length=255)
+    payout_position: Optional[int] = Field(None, ge=1)
+
+
+class SusuMemberUpdate(BaseModel):
+    payout_position: Optional[int] = Field(None, ge=1)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    phone: Optional[str] = Field(None, min_length=7, max_length=50)
+    email: Optional[str] = None
+
+
+class SusuMemberResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    group_id: uuid.UUID
+    user_id: Optional[uuid.UUID]
+    name: str
+    phone: str
+    email: Optional[str]
+    payout_position: Optional[int]
+    has_received_payout: bool
+    total_contributed: Decimal
+    joined_at: datetime
+
+
+class SusuContributionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    cycle_id: uuid.UUID
+    member_id: uuid.UUID
+    member_name: str
+    amount: Decimal
+    paid: bool
+    paid_via: Optional[SusuPaidVia]
+    paid_at: Optional[datetime]
+
+
+class SusuCycleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    group_id: uuid.UUID
+    cycle_number: int
+    due_date: date
+    pot_amount: Decimal
+    collected_amount: Decimal
+    recipient_member_id: uuid.UUID
+    recipient_name: str
+    payout_sent_at: Optional[datetime]
+    status: SusuCycleStatus
+    contributions: List[SusuContributionResponse] = []
+
+
+class SusuCycleSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    cycle_number: int
+    due_date: date
+    pot_amount: Decimal
+    collected_amount: Decimal
+    recipient_member_id: uuid.UUID
+    recipient_name: str
+    payout_sent_at: Optional[datetime]
+    status: SusuCycleStatus
+
+
+class SusuGroupResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    org_id: Optional[uuid.UUID]
+    owner_id: uuid.UUID
+    name: str
+    slug: str
+    contribution_amount: Decimal
+    frequency: SusuFrequency
+    total_members: int
+    current_cycle: int
+    total_cycles: int
+    status: SusuStatus
+    payout_order: SusuPayoutOrder
+    start_date: date
+    next_contribution_date: Optional[date]
+    next_payout_date: Optional[date]
+    created_at: datetime
+
+
+class SusuDetailResponse(SusuGroupResponse):
+    members: List[SusuMemberResponse] = []
+    current_cycle_detail: Optional[SusuCycleResponse] = None
+    cycle_summaries: List[SusuCycleSummary] = []
+
+
+class SusuContributeRequest(BaseModel):
+    member_id: uuid.UUID
+    email: Optional[str] = None
+
+
+class SusuCheckoutResponse(BaseModel):
+    checkout_url: str
+
+
+class MarkPaidRequest(BaseModel):
+    paid_via: SusuPaidVia = SusuPaidVia.cash
