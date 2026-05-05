@@ -1,12 +1,15 @@
+import asyncio
 import math
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response
 from slugify import slugify
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_arq, get_current_user
 from app.models.campaign import Campaign, CampaignStatus
@@ -223,3 +226,42 @@ async def remind_all(
 
     await arq.enqueue_job("send_reminder_blast", campaign_id=str(campaign.id))
     return {"queued": queued}
+
+
+# --- Printable QR collection card ---
+
+@router.get("/{slug}/qr-card")
+async def qr_card(
+    slug: str,
+    format: Literal["png", "pdf"] = Query("png"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a printable A5 QR collection card as PNG or PDF."""
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    campaign_url = f"{settings.FRONTEND_URL}/p/{campaign.slug}"
+
+    from app.workers.cards import generate_qr_card as _gen_qr
+
+    as_pdf = format == "pdf"
+    card_bytes = await asyncio.to_thread(
+        _gen_qr,
+        title=campaign.title,
+        emoji=campaign.emoji or "🎯",
+        slug=campaign.slug,
+        campaign_url=campaign_url,
+        as_pdf=as_pdf,
+    )
+
+    if as_pdf:
+        media_type = "application/pdf"
+        filename = f"chipin-{campaign.slug}-qr.pdf"
+    else:
+        media_type = "image/png"
+        filename = f"chipin-{campaign.slug}-qr.png"
+
+    return Response(
+        content=card_bytes,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

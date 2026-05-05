@@ -240,6 +240,38 @@ async def send_reminder_blast(ctx: dict, *, campaign_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Image send helper (non-template, for milestone cards)
+# ---------------------------------------------------------------------------
+
+async def send_image(phone: str, image_url: str, caption: str) -> bool:
+    """Send a WhatsApp image message (non-template) via Meta Cloud API."""
+    if not settings.META_WHATSAPP_TOKEN or not settings.META_PHONE_NUMBER_ID:
+        return False
+    url = f"{_META_BASE}/{settings.META_PHONE_NUMBER_ID}/messages"
+    payload: dict[str, Any] = {
+        "messaging_product": "whatsapp",
+        "to": phone,
+        "type": "image",
+        "image": {"link": image_url, "caption": caption},
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.META_WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code >= 400:
+                logger.error("WhatsApp image send failed to %s: %s", phone, resp.text)
+                return False
+            logger.info("WhatsApp image sent to %s", phone)
+            return True
+        except Exception as exc:
+            logger.warning("WhatsApp image send error to %s: %s", phone, exc)
+            return False
+
+
+# ---------------------------------------------------------------------------
 # Task 4 — Campaign completion check
 # ---------------------------------------------------------------------------
 

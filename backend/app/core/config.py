@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
     R2_BUCKET_NAME: str = "chipin"
+    R2_PUBLIC_URL: str = ""  # e.g. https://pub-xxx.r2.dev or custom domain
 
     FRONTEND_URL: str = "http://localhost:5173"
     ALLOWED_ORIGINS: str = "http://localhost:5173"

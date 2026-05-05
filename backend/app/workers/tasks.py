@@ -14,6 +14,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.campaign import Campaign, VisibilityMode
 from app.models.contributor import Contributor
 from app.models.user import User
+from app.workers.cards import generate_milestone_card
 from app.workers.whatsapp import (
     check_campaign_completion,
     send_payment_confirmation,
@@ -124,6 +125,19 @@ async def broadcast_campaign_update(ctx: dict, *, campaign_id: str) -> None:
         })
         await ctx["redis"].publish(f"chipin:campaign:{campaign_id}", payload)
 
+        # Milestone detection — fire card generation once per milestone per campaign
+        for milestone in [25, 50, 75, 100]:
+            if progress_pct >= milestone:
+                flag_key = f"chipin:milestone:{campaign_id}:{milestone}"
+                already_sent = await ctx["redis"].exists(flag_key)
+                if not already_sent:
+                    await ctx["redis"].set(flag_key, "1")
+                    await ctx["redis"].enqueue_job(
+                        "generate_milestone_card",
+                        campaign_id=campaign_id,
+                        milestone_pct=milestone,
+                    )
+
         if campaign.whatsapp_reminders_enabled:
             owner = await db.get(User, campaign.owner_id)
             if owner and owner.phone:
@@ -151,6 +165,8 @@ class WorkerSettings:
         send_payment_reminder,
         send_reminder_blast,
         check_campaign_completion,
+        # Viral growth cards
+        generate_milestone_card,
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     max_jobs = 10

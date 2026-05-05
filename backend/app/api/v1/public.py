@@ -1,11 +1,12 @@
 import asyncio
+import base64
 import contextlib
 import json
 from decimal import Decimal
 from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy import nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -150,6 +151,68 @@ async def campaign_stats(slug: str, db: AsyncSession = Depends(get_db)):
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return await _fetch_stats(db, campaign)
+
+
+@router.get("/p/{slug}/share-card")
+async def campaign_share_card(
+    slug: str,
+    milestone: int = Query(50, ge=25, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a milestone share card as a PNG image (cached for 10 min)."""
+    result = await db.execute(select(Campaign).where(Campaign.slug == slug))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    redis = await get_redis()
+    cache_key = f"chipin:sharecard:{slug}:{milestone}"
+    cached = await redis.get(cache_key)
+
+    if cached:
+        png_bytes = base64.b64decode(cached)
+    else:
+        total_result = await db.execute(
+            select(func.sum(Contributor.amount)).where(
+                Contributor.campaign_id == campaign.id,
+                Contributor.paid.is_(True),
+            )
+        )
+        total_raised = total_result.scalar_one_or_none() or Decimal("0")
+
+        paid_result = await db.execute(
+            select(func.count()).where(
+                Contributor.campaign_id == campaign.id,
+                Contributor.paid.is_(True),
+            )
+        )
+        paid_count = paid_result.scalar_one()
+
+        from app.workers.cards import generate_share_card
+
+        campaign_type = (
+            campaign.campaign_type.value
+            if hasattr(campaign.campaign_type, "value")
+            else str(campaign.campaign_type)
+        )
+        png_bytes = await asyncio.to_thread(
+            generate_share_card,
+            title=campaign.title,
+            emoji=campaign.emoji or "🎯",
+            campaign_type=campaign_type,
+            milestone_pct=milestone,
+            total_raised=float(total_raised),
+            currency=campaign.currency,
+            goal_amount=float(campaign.goal_amount),
+            paid_count=paid_count,
+        )
+        await redis.set(cache_key, base64.b64encode(png_bytes).decode(), ex=600)
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
 
 
 @router.get("/p/{slug}/stream")

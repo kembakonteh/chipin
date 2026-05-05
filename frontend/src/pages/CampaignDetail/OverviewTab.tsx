@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import type { Campaign, Contributor } from '../../types'
 import { computeStats, fmt } from '../../types'
 import ProgressRing from '../../components/ProgressRing'
 import CopyLinkBar from '../../components/CopyLinkBar'
+import { api } from '../../lib/api'
 
 interface Props {
   campaign: Campaign
@@ -33,6 +35,9 @@ export default function OverviewTab({ campaign, contributors }: Props) {
         <CopyLinkBar campaign={campaign} contributors={contributors} />
       </div>
 
+      {/* QR collection card */}
+      <QrCardDownload slug={campaign.slug} />
+
       {/* Earnings summary */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
         <h3 className="text-sm font-semibold text-white mb-4">Earnings summary</h3>
@@ -47,6 +52,58 @@ export default function OverviewTab({ campaign, contributors }: Props) {
             <EarningsRow label="Net to organizer" value={fmt(stats.net, campaign.currency)} accent />
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function QrCardDownload({ slug }: { slug: string }) {
+  const [loadingPng, setLoadingPng] = useState(false)
+  const [loadingPdf, setLoadingPdf] = useState(false)
+
+  async function download(format: 'png' | 'pdf') {
+    const set = format === 'png' ? setLoadingPng : setLoadingPdf
+    set(true)
+    try {
+      const res = await api.get(`/campaigns/${slug}/qr-card?format=${format}`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `chipin-${slug}-qr.${format}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      // silent — user can retry
+    } finally {
+      set(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+      <h3 className="text-sm font-semibold text-white mb-1">Collection card</h3>
+      <p className="text-xs text-gray-500 mb-4">
+        Print this A5 card and display at collection points — contributors scan the QR to chip in
+      </p>
+      <div className="flex gap-3">
+        <button
+          onClick={() => download('png')}
+          disabled={loadingPng}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 text-sm
+            text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+        >
+          {loadingPng ? '…' : '↓'} PNG
+        </button>
+        <button
+          onClick={() => download('pdf')}
+          disabled={loadingPdf}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-700 text-sm
+            text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+        >
+          {loadingPdf ? '…' : '↓'} PDF
+        </button>
       </div>
     </div>
   )

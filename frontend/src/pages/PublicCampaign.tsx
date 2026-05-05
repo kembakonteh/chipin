@@ -7,6 +7,8 @@ import type { CampaignType } from '../types'
 import { fmt } from '../types'
 import ProgressRing from '../components/ProgressRing'
 
+const MILESTONES = [25, 50, 75, 100] as const
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface PublicContributor {
@@ -106,6 +108,11 @@ export default function PublicCampaign() {
   const [newPayer, setNewPayer] = useState<string | null>(null)
   const newPayerTimer = useRef<ReturnType<typeof setTimeout>>()
 
+  // Milestone banner
+  const [milestonePct, setMilestonePct] = useState<number | null>(null)
+  const milestoneTimer = useRef<ReturnType<typeof setTimeout>>()
+  const shownMilestones = useRef<Set<number>>(new Set())
+
   // Animated progress: start at 0 then transition to real value
   const realProgress = live
     ? live.progress_pct
@@ -132,11 +139,23 @@ export default function PublicCampaign() {
         setNewPayer(data.latest_payer_display_name)
         newPayerTimer.current = setTimeout(() => setNewPayer(null), 4_000)
       }
+
+      // Milestone detection (highest new milestone wins)
+      for (const m of [...MILESTONES].reverse()) {
+        if (data.progress_pct >= m && !shownMilestones.current.has(m)) {
+          shownMilestones.current.add(m)
+          clearTimeout(milestoneTimer.current)
+          setMilestonePct(m)
+          milestoneTimer.current = setTimeout(() => setMilestonePct(null), 10_000)
+          break
+        }
+      }
     })
     es.onerror = () => es.close()
     return () => {
       es.close()
       clearTimeout(newPayerTimer.current)
+      clearTimeout(milestoneTimer.current)
     }
   }, [slug, campaign?.slug])
 
@@ -250,6 +269,40 @@ export default function PublicCampaign() {
         <div className="animate-pulse fixed top-0 inset-x-0 z-50 px-4 py-3 text-center text-sm
           font-medium text-white bg-brand-500 shadow-lg">
           💚 {newPayer} just chipped in!
+        </div>
+      )}
+
+      {/* ── Milestone banner ── */}
+      {milestonePct && slug && (
+        <div className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-brand-700 to-brand-500
+          px-4 py-3 shadow-lg">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 text-white">
+            <span className="text-sm font-bold">
+              🎉 {milestonePct}% funded! Amazing momentum!
+            </span>
+            <div className="flex items-center gap-2">
+              <a
+                href={`${BASE_URL}/p/${slug}/share-card?milestone=${milestonePct}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold bg-white/20 hover:bg-white/30 rounded-full
+                  px-3 py-1 transition-colors"
+              >
+                View share card ↗
+              </a>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `🎉 ${milestonePct}% funded! Help us reach our goal — ${window.location.href}`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold bg-white/20 hover:bg-white/30 rounded-full
+                  px-3 py-1 transition-colors"
+              >
+                Share on WhatsApp
+              </a>
+            </div>
+          </div>
         </div>
       )}
 
