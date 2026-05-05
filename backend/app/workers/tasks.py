@@ -6,6 +6,7 @@ from typing import Optional
 
 import httpx
 from arq.connections import RedisSettings
+from arq.cron import cron as arq_cron
 from sqlalchemy import func, select
 from sqlalchemy import nullslast
 
@@ -15,6 +16,7 @@ from app.models.campaign import Campaign, VisibilityMode
 from app.models.contributor import Contributor
 from app.models.user import User
 from app.workers.cards import generate_milestone_card
+from app.workers.recurring import process_recurring_schedules, send_recurring_reminders
 from app.workers.whatsapp import (
     check_campaign_completion,
     send_payment_confirmation,
@@ -167,6 +169,13 @@ class WorkerSettings:
         check_campaign_completion,
         # Viral growth cards
         generate_milestone_card,
+        # Recurring collections
+        process_recurring_schedules,
+        send_recurring_reminders,
+    ]
+    cron_jobs = [
+        arq_cron(process_recurring_schedules, hour=8, minute=0),
+        arq_cron(send_recurring_reminders, hour=9, minute=0),
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     max_jobs = 10

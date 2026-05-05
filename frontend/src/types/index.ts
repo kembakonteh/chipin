@@ -4,6 +4,8 @@ export type CampaignStatus = 'active' | 'paused' | 'completed' | 'archived'
 export type PaidVia = 'card' | 'zelle' | 'cash' | 'cashapp' | 'manual'
 export type OrgType = 'sports' | 'religious' | 'community' | 'professional' | 'social'
 export type OrgMemberRole = 'admin' | 'treasurer' | 'member'
+export type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual'
+export type InstanceStatus = 'upcoming' | 'active' | 'completed' | 'missed'
 
 export interface Campaign {
   id: string
@@ -131,6 +133,40 @@ export interface PublicOrg {
   active_campaigns: PublicOrgCampaign[]
   past_campaigns: PublicOrgCampaign[]
   stats: OrgStats
+}
+
+export interface RecurringSchedule {
+  id: string
+  campaign_id: string
+  org_id: string | null
+  frequency: Frequency
+  day_of_month: number | null
+  day_of_week: number | null
+  start_date: string
+  end_date: string | null
+  auto_create_days_before: number
+  auto_remind_days_before: number
+  is_active: boolean
+  last_run_at: string | null
+  next_run_at: string
+  next_due_date: string
+  created_at: string
+}
+
+export interface RecurringInstance {
+  id: string
+  schedule_id: string
+  campaign_id: string
+  due_date: string
+  status: InstanceStatus
+  created_at: string
+}
+
+export interface RecurringScheduleWithCampaign extends RecurringSchedule {
+  campaign_slug: string
+  campaign_title: string
+  campaign_emoji: string
+  recent_instances: RecurringInstance[]
 }
 
 export interface CampaignStats {

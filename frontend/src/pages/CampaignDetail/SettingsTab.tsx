@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
-import type { Campaign, CampaignType, VisibilityMode, CampaignStatus } from '../../types'
+import type { Campaign, CampaignType, Frequency, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
 import CampaignTypeSelector from '../../components/CampaignTypeSelector'
 
 interface Form {
@@ -254,6 +254,9 @@ export default function SettingsTab({ campaign }: Props) {
         {saveMutation.isPending ? 'Saving…' : 'Save changes'}
       </button>
 
+      {/* Recurring */}
+      <RecurringSection campaign={campaign} />
+
       {/* Campaign status actions */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-3">
         <h3 className="text-sm font-semibold text-white mb-1">Campaign status</h3>
@@ -309,6 +312,225 @@ export default function SettingsTab({ campaign }: Props) {
         </div>
       </div>
     </form>
+  )
+}
+
+// ── Recurring Schedule Section ────────────────────────────────────────────────
+
+const FREQ_LABELS: Record<Frequency, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Biweekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  annual: 'Annual',
+}
+
+const DOW_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+function formatNextDue(schedule: RecurringSchedule): string {
+  return new Date(schedule.next_due_date + 'T00:00:00').toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  })
+}
+
+function RecurringSection({ campaign }: { campaign: Campaign }) {
+  const qc = useQueryClient()
+  const [enabled, setEnabled] = useState(false)
+  const [freq, setFreq] = useState<Frequency>('monthly')
+  const [dom, setDom] = useState('1')
+  const [dow, setDow] = useState('0')
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate] = useState('')
+  const [remindDays, setRemindDays] = useState(1)
+  const [createDays, setCreateDays] = useState(3)
+
+  const scheduleQ = useQuery<RecurringSchedule | null>({
+    queryKey: ['schedule', campaign.slug],
+    queryFn: () => api.get<RecurringSchedule | null>(`/campaigns/${campaign.slug}/schedule`).then(r => r.data),
+  })
+  const schedule = scheduleQ.data
+
+  useEffect(() => {
+    if (schedule) {
+      setEnabled(schedule.is_active)
+      setFreq(schedule.frequency)
+      setDom(String(schedule.day_of_month ?? 1))
+      setDow(String(schedule.day_of_week ?? 0))
+      setStartDate(schedule.start_date)
+      setEndDate(schedule.end_date ?? '')
+      setRemindDays(schedule.auto_remind_days_before)
+      setCreateDays(schedule.auto_create_days_before)
+    }
+  }, [schedule?.id])
+
+  const createSchedule = useMutation({
+    mutationFn: () =>
+      api.post<RecurringSchedule>(`/campaigns/${campaign.slug}/schedule`, {
+        frequency: freq,
+        day_of_month: ['monthly', 'quarterly', 'annual'].includes(freq) ? parseInt(dom) : null,
+        day_of_week: ['weekly', 'biweekly'].includes(freq) ? parseInt(dow) : null,
+        start_date: startDate,
+        end_date: endDate || null,
+        auto_create_days_before: createDays,
+        auto_remind_days_before: remindDays,
+      }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['schedule', campaign.slug] })
+      qc.invalidateQueries({ queryKey: ['recurring'] })
+      toast.success('Recurring schedule saved')
+    },
+    onError: () => toast.error('Failed to save schedule'),
+  })
+
+  const toggleActive = useMutation({
+    mutationFn: (active: boolean) =>
+      api.patch<RecurringSchedule>(`/campaigns/${campaign.slug}/schedule`, { is_active: active }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['schedule', campaign.slug] })
+      qc.invalidateQueries({ queryKey: ['recurring'] })
+    },
+  })
+
+  const needsDom = ['monthly', 'quarterly', 'annual'].includes(freq)
+  const needsDow = ['weekly', 'biweekly'].includes(freq)
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Recurring Collection</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Auto-create this campaign every cycle</p>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={e => {
+              setEnabled(e.target.checked)
+              if (schedule && !e.target.checked) {
+                toggleActive.mutate(false)
+              }
+            }}
+            className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-500 focus:ring-brand-500 focus:ring-offset-gray-900"
+          />
+          <span className="text-sm text-gray-300">{enabled ? 'On' : 'Off'}</span>
+        </label>
+      </div>
+
+      {schedule && schedule.is_active && (
+        <div className="rounded-lg bg-brand-900/30 border border-brand-800/40 px-4 py-3 text-sm">
+          <p className="text-brand-300 font-medium">
+            ↺ {FREQ_LABELS[schedule.frequency]} · Next collection: {formatNextDue(schedule)}
+          </p>
+          <p className="text-brand-400/70 text-xs mt-0.5">
+            Reminders {schedule.auto_remind_days_before}d before due ·
+            Campaign created {schedule.auto_create_days_before}d before due
+          </p>
+        </div>
+      )}
+
+      {enabled && (
+        <div className="space-y-4 pt-1">
+          <div>
+            <label className="block text-xs text-gray-400 mb-2">Frequency</label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(FREQ_LABELS) as Frequency[]).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFreq(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    freq === f
+                      ? 'bg-brand-600 text-white'
+                      : 'border border-gray-700 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {FREQ_LABELS[f]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {needsDom && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Day of month (1–28)</label>
+              <input
+                type="number"
+                min="1"
+                max="28"
+                value={dom}
+                onChange={e => setDom(e.target.value)}
+                className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+          )}
+
+          {needsDow && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Day of week</label>
+              <select
+                value={dow}
+                onChange={e => setDow(e.target.value)}
+                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+              >
+                {DOW_LABELS.map((d, i) => (
+                  <option key={i} value={i}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Start date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">End date (optional)</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Remind contributors {remindDays} day{remindDays !== 1 ? 's' : ''} before due
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="7"
+              value={remindDays}
+              onChange={e => setRemindDays(parseInt(e.target.value))}
+              className="w-full accent-brand-500"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => createSchedule.mutate()}
+            disabled={createSchedule.isPending || !startDate}
+            className="w-full rounded-lg bg-brand-600/20 border border-brand-700 py-2 text-sm font-medium
+              text-brand-300 hover:bg-brand-600/40 disabled:opacity-50 transition-colors"
+          >
+            {createSchedule.isPending
+              ? 'Saving…'
+              : schedule
+                ? 'Update Schedule'
+                : 'Enable Recurring'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

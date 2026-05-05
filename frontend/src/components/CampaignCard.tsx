@@ -1,10 +1,18 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import type { Campaign, Contributor } from '../types'
+import type { Campaign, Contributor, RecurringSchedule } from '../types'
 import { computeStats, fmt } from '../types'
 import StatusBadge from './StatusBadge'
 import { CAMPAIGN_TYPES } from './CampaignTypeSelector'
+
+const FREQ_SHORT: Record<string, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Biweekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  annual: 'Annual',
+}
 
 function typeEmoji(ct: Campaign['campaign_type']) {
   return CAMPAIGN_TYPES.find(t => t.value === ct)?.emoji ?? '⚽'
@@ -17,6 +25,13 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
     queryKey: ['contributors', campaign.slug],
     queryFn: () =>
       api.get<Contributor[]>(`/campaigns/${campaign.slug}/contributors`).then(r => r.data),
+  })
+
+  const { data: schedule } = useQuery<RecurringSchedule | null>({
+    queryKey: ['schedule', campaign.slug],
+    queryFn: () =>
+      api.get<RecurringSchedule | null>(`/campaigns/${campaign.slug}/schedule`).then(r => r.data),
+    staleTime: 60_000,
   })
 
   const stats = contributors ? computeStats(campaign, contributors) : null
@@ -42,6 +57,14 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
             <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
               {typeEmoji(campaign.campaign_type)}
               <span className="capitalize">{campaign.campaign_type}</span>
+              {schedule?.is_active && (
+                <span className="ml-1 text-brand-400 font-medium">
+                  · ↺ {FREQ_SHORT[schedule.frequency]}
+                  {schedule.next_due_date && (
+                    <> · Next {new Date(schedule.next_due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                  )}
+                </span>
+              )}
             </span>
           </div>
         </div>

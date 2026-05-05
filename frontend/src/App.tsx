@@ -9,6 +9,7 @@ import PublicCampaign from './pages/PublicCampaign'
 import OrgsPage from './pages/OrgsPage'
 import OrgDetail from './pages/OrgDetail'
 import PublicOrgPage from './pages/PublicOrg'
+import RecurringPage from './pages/RecurringPage'
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/campaigns/:slug" element={<Protected><CampaignDetail /></Protected>} />
         <Route path="/orgs" element={<Protected><OrgsPage /></Protected>} />
         <Route path="/orgs/:slug" element={<Protected><OrgDetail /></Protected>} />
+        <Route path="/recurring" element={<Protected><RecurringPage /></Protected>} />
         <Route path="/p/:slug" element={<PublicCampaign />} />
         <Route path="/o/:slug" element={<PublicOrgPage />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
