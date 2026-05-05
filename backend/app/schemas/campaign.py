@@ -6,6 +6,7 @@ from typing import Generic, List, Optional, TypeVar
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.campaign import CampaignStatus, CampaignType, VisibilityMode
+from app.schemas.beneficiary import BeneficiaryResponse
 
 T = TypeVar("T")
 
@@ -29,6 +30,7 @@ class CampaignCreate(BaseModel):
     visibility_mode: VisibilityMode = VisibilityMode.full_name
     allow_anonymous_contributions: bool = True
     whatsapp_reminders_enabled: bool = True
+    template_id: Optional[uuid.UUID] = None
 
     @field_validator("currency")
     @classmethod
@@ -69,3 +71,4 @@ class CampaignResponse(BaseModel):
     org_id: Optional[uuid.UUID]
     created_at: datetime
     updated_at: datetime
+    beneficiary: Optional[BeneficiaryResponse] = None

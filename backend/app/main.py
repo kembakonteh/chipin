@@ -9,14 +9,18 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
 from app.core.limiter import limiter
 from app.core.redis_client import close_redis, get_redis
+from app.core.seed import seed_templates
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.arq = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
     await get_redis()
+    async with AsyncSessionLocal() as db:
+        await seed_templates(db)
     yield
     await app.state.arq.aclose()
     await close_redis()

@@ -5,6 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from app.models.campaign import CampaignStatus, CampaignType
+from app.schemas.beneficiary import BeneficiaryResponse
 
 
 class PublicContributorItem(BaseModel):
@@ -37,3 +38,4 @@ class PublicCampaignResponse(BaseModel):
     paid_count: int
     contributors: List[PublicContributorItem]
     status: CampaignStatus
+    beneficiary: Optional[BeneficiaryResponse] = None

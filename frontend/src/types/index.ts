@@ -21,6 +21,7 @@ export interface Campaign {
   org_id: string | null
   created_at: string
   updated_at: string
+  beneficiary?: Beneficiary | null
 }
 
 export interface Contributor {
@@ -50,6 +51,29 @@ export interface PaginatedResponse<T> {
 export interface TokenResponse {
   access_token: string
   refresh_token: string
+}
+
+export interface CampaignTemplate {
+  id: string
+  name: string
+  campaign_type: CampaignType
+  emoji: string
+  description_template: string
+  default_amount_per_person: string | null
+  default_visibility_mode: VisibilityMode
+  default_anonymous: boolean
+  whatsapp_share_text_template: string
+  sort_order: number
+}
+
+export interface Beneficiary {
+  id: string
+  campaign_id: string
+  display_name: string
+  photo_url: string | null
+  story: string | null
+  location: string | null
+  created_at: string
 }
 
 export interface CampaignStats {

@@ -3,7 +3,7 @@ import math
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from slugify import slugify
 from sqlalchemy import func, select
@@ -12,10 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_arq, get_current_user
+from app.core.r2 import upload_bytes
+from app.models.beneficiary import Beneficiary
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.contributor import Contributor
 from app.models.org import Org, OrgMember
+from app.models.template import CampaignTemplate
 from app.models.user import User
+from app.schemas.beneficiary import BeneficiaryResponse
 from app.schemas.campaign import (
     CampaignCreate,
     CampaignResponse,
@@ -58,12 +62,28 @@ async def create_campaign(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    data = body.model_dump()
+    data.pop("template_id", None)
+
+    if body.template_id:
+        template = await db.get(CampaignTemplate, body.template_id)
+        if template:
+            explicit = body.model_dump(exclude_unset=True)
+            if "emoji" not in explicit:
+                data["emoji"] = template.emoji
+            if "campaign_type" not in explicit:
+                data["campaign_type"] = template.campaign_type
+            if "description" not in explicit:
+                data["description"] = template.description_template
+            if "amount_per_person" not in explicit:
+                data["amount_per_person"] = template.default_amount_per_person
+            if "visibility_mode" not in explicit:
+                data["visibility_mode"] = template.default_visibility_mode
+            if "allow_anonymous_contributions" not in explicit:
+                data["allow_anonymous_contributions"] = template.default_anonymous
+
     slug = await _unique_slug(body.title, db)
-    campaign = Campaign(
-        **body.model_dump(),
-        owner_id=current_user.id,
-        slug=slug,
-    )
+    campaign = Campaign(**data, owner_id=current_user.id, slug=slug)
     db.add(campaign)
     await db.commit()
     await db.refresh(campaign)
@@ -102,7 +122,16 @@ async def get_campaign(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await _get_campaign_or_404(slug, current_user.id, db)
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Campaign)
+        .where(Campaign.slug == slug, Campaign.owner_id == current_user.id)
+        .options(selectinload(Campaign.beneficiary))
+    )
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    return campaign
 
 
 @router.patch("/{slug}", response_model=CampaignResponse)
@@ -265,3 +294,122 @@ async def qr_card(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# --- Beneficiary profile ---
+
+@router.post(
+    "/{slug}/beneficiary",
+    response_model=BeneficiaryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_beneficiary(
+    slug: str,
+    display_name: str = Form(...),
+    story: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+
+    existing = await db.execute(
+        select(Beneficiary).where(Beneficiary.campaign_id == campaign.id)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This campaign already has a beneficiary profile. Use PATCH to update.",
+        )
+
+    photo_url: Optional[str] = None
+    if photo and photo.size:
+        content = await photo.read()
+        ext = (photo.filename or "photo").rsplit(".", 1)[-1].lower()
+        key = f"chipin/beneficiaries/{campaign.id}/{uuid.uuid4()}.{ext}"
+        photo_url = await upload_bytes(key, content, photo.content_type or "image/jpeg")
+
+    beneficiary = Beneficiary(
+        campaign_id=campaign.id,
+        display_name=display_name,
+        story=story,
+        location=location,
+        photo_url=photo_url,
+    )
+    db.add(beneficiary)
+    await db.commit()
+    await db.refresh(beneficiary)
+    return beneficiary
+
+
+@router.get("/{slug}/beneficiary", response_model=Optional[BeneficiaryResponse])
+async def get_beneficiary(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    result = await db.execute(
+        select(Beneficiary).where(Beneficiary.campaign_id == campaign.id)
+    )
+    return result.scalar_one_or_none()
+
+
+@router.patch("/{slug}/beneficiary", response_model=BeneficiaryResponse)
+async def update_beneficiary(
+    slug: str,
+    display_name: Optional[str] = Form(None),
+    story: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    result = await db.execute(
+        select(Beneficiary).where(Beneficiary.campaign_id == campaign.id)
+    )
+    beneficiary = result.scalar_one_or_none()
+    if not beneficiary:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No beneficiary profile found."
+        )
+
+    if display_name is not None:
+        beneficiary.display_name = display_name
+    if story is not None:
+        beneficiary.story = story
+    if location is not None:
+        beneficiary.location = location
+
+    if photo and photo.size:
+        content = await photo.read()
+        ext = (photo.filename or "photo").rsplit(".", 1)[-1].lower()
+        key = f"chipin/beneficiaries/{campaign.id}/{uuid.uuid4()}.{ext}"
+        new_url = await upload_bytes(key, content, photo.content_type or "image/jpeg")
+        if new_url:
+            beneficiary.photo_url = new_url
+
+    await db.commit()
+    await db.refresh(beneficiary)
+    return beneficiary
+
+
+@router.delete("/{slug}/beneficiary", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_beneficiary(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    result = await db.execute(
+        select(Beneficiary).where(Beneficiary.campaign_id == campaign.id)
+    )
+    beneficiary = result.scalar_one_or_none()
+    if not beneficiary:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No beneficiary profile found."
+        )
+    await db.delete(beneficiary)
+    await db.commit()

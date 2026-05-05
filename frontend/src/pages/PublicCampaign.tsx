@@ -18,6 +18,13 @@ interface PublicContributor {
   paid_at: string | null
 }
 
+interface PublicBeneficiary {
+  display_name: string
+  photo_url: string | null
+  story: string | null
+  location: string | null
+}
+
 interface PublicCampaign {
   slug: string
   title: string
@@ -33,6 +40,7 @@ interface PublicCampaign {
   paid_count: number
   contributors: PublicContributor[]
   status: string
+  beneficiary: PublicBeneficiary | null
 }
 
 interface LiveStats {
@@ -348,6 +356,14 @@ export default function PublicCampaign() {
         </div>
       </div>
 
+      {/* ── Beneficiary section ── */}
+      {campaign.beneficiary && (
+        <BeneficiarySection
+          beneficiary={campaign.beneficiary}
+          campaignType={campaign.campaign_type}
+        />
+      )}
+
       {/* ── Pay section ── */}
       <div className="px-4 py-6 bg-white border-b border-gray-100">
         {!isActive && (
@@ -498,6 +514,72 @@ export default function PublicCampaign() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+// ── Beneficiary section ───────────────────────────────────────────────────────
+
+function BeneficiarySection({
+  beneficiary: b,
+  campaignType,
+}: {
+  beneficiary: PublicBeneficiary
+  campaignType: CampaignType
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isMemorial = campaignType === 'memorial'
+
+  const bgClass = isMemorial
+    ? 'bg-slate-50 border-b border-slate-200'
+    : 'bg-amber-50 border-b border-amber-100'
+  const nameClass = isMemorial ? 'text-slate-800' : 'text-amber-900'
+  const locationClass = isMemorial ? 'text-slate-500' : 'text-amber-700'
+  const storyClass = isMemorial ? 'text-slate-600' : 'text-amber-800'
+  const readMoreClass = isMemorial ? 'text-slate-500 hover:text-slate-700' : 'text-amber-600 hover:text-amber-800'
+
+  const story = b.story ?? ''
+  const needsTruncate = story.length > 180
+
+  return (
+    <div className={`px-4 py-5 ${bgClass}`}>
+      <div className="flex items-start gap-4">
+        {/* Photo */}
+        <div className={`h-20 w-20 shrink-0 rounded-full overflow-hidden border-2
+          ${isMemorial ? 'border-slate-300' : 'border-amber-300'} bg-gray-200`}>
+          {b.photo_url ? (
+            <img src={b.photo_url} alt={b.display_name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="h-full w-full flex items-center justify-center text-3xl">
+              {isMemorial ? '🕊' : '❤️'}
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <p className={`font-semibold text-base ${nameClass}`}>{b.display_name}</p>
+          {b.location && (
+            <p className={`text-xs mt-0.5 ${locationClass}`}>📍 {b.location}</p>
+          )}
+          {story && (
+            <div className="mt-2">
+              <p className={`text-sm leading-relaxed ${storyClass} ${!expanded && needsTruncate ? 'line-clamp-3' : ''}`}>
+                {story}
+              </p>
+              {needsTruncate && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(e => !e)}
+                  className={`text-xs mt-1 underline underline-offset-2 transition-colors ${readMoreClass}`}
+                >
+                  {expanded ? 'Show less' : 'Read more'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function Pill({ label, value }: { label: string; value: string }) {
   return (

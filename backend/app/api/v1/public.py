@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy import nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy.orm import selectinload
+
 from app.core import sse_manager
 from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_arq
@@ -97,7 +99,11 @@ async def _fetch_stats(db: AsyncSession, campaign: Campaign) -> CampaignStatsRes
 
 @router.get("/p/{slug}", response_model=PublicCampaignResponse)
 async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Campaign).where(Campaign.slug == slug))
+    result = await db.execute(
+        select(Campaign)
+        .where(Campaign.slug == slug)
+        .options(selectinload(Campaign.beneficiary))
+    )
     campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
@@ -141,6 +147,7 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         paid_count=paid_count,
         contributors=public_contributors,
         status=campaign.status,
+        beneficiary=campaign.beneficiary,
     )
 
 

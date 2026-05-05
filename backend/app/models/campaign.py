@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.beneficiary import Beneficiary
     from app.models.contributor import Contributor
     from app.models.org import Org
     from app.models.payment import Payment
@@ -83,3 +84,6 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     org: Mapped[Optional["Org"]] = relationship("Org")
     contributors: Mapped[List["Contributor"]] = relationship("Contributor", back_populates="campaign")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="campaign")
+    beneficiary: Mapped[Optional["Beneficiary"]] = relationship(
+        "Beneficiary", back_populates="campaign", uselist=False
+    )
