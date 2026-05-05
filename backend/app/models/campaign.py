@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.org import Org
     from app.models.payment import Payment
     from app.models.user import User
+    # noqa: keep imports
 
 
 class CampaignType(str, enum.Enum):
@@ -81,7 +82,7 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     )
 
     owner: Mapped["User"] = relationship("User", back_populates="campaigns")
-    org: Mapped[Optional["Org"]] = relationship("Org")
+    org: Mapped[Optional["Org"]] = relationship("Org", back_populates="campaigns")
     contributors: Mapped[List["Contributor"]] = relationship("Contributor", back_populates="campaign")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="campaign")
     beneficiary: Mapped[Optional["Beneficiary"]] = relationship(

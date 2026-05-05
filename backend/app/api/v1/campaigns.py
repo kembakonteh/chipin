@@ -82,9 +82,52 @@ async def create_campaign(
             if "allow_anonymous_contributions" not in explicit:
                 data["allow_anonymous_contributions"] = template.default_anonymous
 
+    # Verify org ownership/admin before attaching
+    if body.org_id:
+        org_result = await db.execute(
+            select(Org).where(Org.id == body.org_id)
+        )
+        org = org_result.scalar_one_or_none()
+        if not org:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Org not found")
+        if org.owner_id != current_user.id:
+            admin_check = await db.execute(
+                select(OrgMember).where(
+                    OrgMember.org_id == org.id,
+                    OrgMember.user_id == current_user.id,
+                    OrgMember.role.in_(["admin", "treasurer"]),
+                    OrgMember.is_active.is_(True),
+                )
+            )
+            if not admin_check.scalar_one_or_none():
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not an org admin")
+
     slug = await _unique_slug(body.title, db)
     campaign = Campaign(**data, owner_id=current_user.id, slug=slug)
     db.add(campaign)
+    await db.flush()  # get campaign.id
+
+    # Auto-import active org members as contributors
+    if body.org_id:
+        members_result = await db.execute(
+            select(OrgMember).where(
+                OrgMember.org_id == body.org_id,
+                OrgMember.is_active.is_(True),
+            )
+        )
+        org_members = members_result.scalars().all()
+        amount = campaign.amount_per_person or campaign.goal_amount
+        for m in org_members:
+            contributor = Contributor(
+                campaign_id=campaign.id,
+                name=m.name,
+                phone=m.phone,
+                email=m.email,
+                amount=amount,
+                added_by_organizer=True,
+            )
+            db.add(contributor)
+
     await db.commit()
     await db.refresh(campaign)
     return campaign

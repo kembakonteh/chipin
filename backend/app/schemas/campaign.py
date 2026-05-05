@@ -31,6 +31,7 @@ class CampaignCreate(BaseModel):
     allow_anonymous_contributions: bool = True
     whatsapp_reminders_enabled: bool = True
     template_id: Optional[uuid.UUID] = None
+    org_id: Optional[uuid.UUID] = None
 
     @field_validator("currency")
     @classmethod

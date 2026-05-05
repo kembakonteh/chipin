@@ -25,14 +25,28 @@ export default function Layout({ children }: { children: ReactNode }) {
               </span>
             </div>
           </Link>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400
-              hover:border-gray-600 hover:text-white transition-colors"
-          >
-            Sign out
-          </button>
+          <nav className="flex items-center gap-1">
+            <Link
+              to="/dashboard"
+              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Campaigns
+            </Link>
+            <Link
+              to="/orgs"
+              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Organizations
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="ml-2 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400
+                hover:border-gray-600 hover:text-white transition-colors"
+            >
+              Sign out
+            </button>
+          </nav>
         </div>
       </header>
 

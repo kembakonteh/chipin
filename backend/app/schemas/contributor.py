@@ -10,11 +10,12 @@ from app.models.contributor import PaidVia
 
 
 class ContributorCreate(BaseModel):
-    name: str
+    name: str = ""
     phone: Optional[str] = None
     email: Optional[str] = None
     amount: Optional[Decimal] = None  # defaults to campaign.amount_per_person
     is_anonymous: bool = False
+    org_member_id: Optional[uuid.UUID] = None  # add directly from org directory
 
 
 class ContributorUpdate(BaseModel):

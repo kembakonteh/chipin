@@ -2,6 +2,8 @@ export type CampaignType = 'general' | 'memorial' | 'charity' | 'celebration'
 export type VisibilityMode = 'full_name' | 'first_name_only' | 'anonymous'
 export type CampaignStatus = 'active' | 'paused' | 'completed' | 'archived'
 export type PaidVia = 'card' | 'zelle' | 'cash' | 'cashapp' | 'manual'
+export type OrgType = 'sports' | 'religious' | 'community' | 'professional' | 'social'
+export type OrgMemberRole = 'admin' | 'treasurer' | 'member'
 
 export interface Campaign {
   id: string
@@ -74,6 +76,61 @@ export interface Beneficiary {
   story: string | null
   location: string | null
   created_at: string
+}
+
+export interface Org {
+  id: string
+  name: string
+  slug: string | null
+  description: string | null
+  logo_url: string | null
+  org_type: OrgType | null
+  owner_id: string
+  whatsapp_group_name: string | null
+  created_at: string
+  member_count: number
+}
+
+export interface OrgMember {
+  id: string
+  org_id: string
+  user_id: string | null
+  name: string
+  phone: string | null
+  email: string | null
+  role: OrgMemberRole
+  is_active: boolean
+  joined_at: string | null
+  total_campaigns: number
+  paid_campaigns: number
+}
+
+export interface OrgStats {
+  total_raised: string
+  total_campaigns: number
+  active_campaigns: number
+}
+
+export interface PublicOrgCampaign {
+  slug: string
+  title: string
+  emoji: string
+  status: string
+  total_raised: string
+  goal_amount: string
+  paid_count: number
+}
+
+export interface PublicOrg {
+  name: string
+  slug: string
+  description: string | null
+  logo_url: string | null
+  org_type: OrgType | null
+  whatsapp_group_name: string | null
+  active_campaigns: PublicOrgCampaign[]
+  past_campaigns: PublicOrgCampaign[]
+  stats: OrgStats
 }
 
 export interface CampaignStats {

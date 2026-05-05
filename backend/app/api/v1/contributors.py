@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.deps import get_arq, get_current_user
 from app.models.campaign import Campaign
 from app.models.contributor import Contributor
+from app.models.org import OrgMember
 from app.models.user import User
 from app.schemas.contributor import (
     ContributorCreate,
@@ -57,12 +58,46 @@ async def add_contributor(
     db: AsyncSession = Depends(get_db),
 ):
     campaign = await _get_campaign_scoped(slug, current_user.id, db)
+
+    name = body.name
+    phone = body.phone
+    email = body.email
+
+    # If org_member_id provided, pull data from org directory
+    if body.org_member_id:
+        member_result = await db.execute(
+            select(OrgMember).where(OrgMember.id == body.org_member_id)
+        )
+        member = member_result.scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Org member not found")
+        if not name:
+            name = member.name
+        if phone is None:
+            phone = member.phone
+        if email is None:
+            email = member.email
+
+    # Deduplicate by phone
+    if phone:
+        dup_result = await db.execute(
+            select(Contributor).where(
+                Contributor.campaign_id == campaign.id,
+                Contributor.phone == phone,
+            )
+        )
+        if dup_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A contributor with this phone number is already on the campaign.",
+            )
+
     amount = body.amount if body.amount is not None else (campaign.amount_per_person or 0)
     contributor = Contributor(
         campaign_id=campaign.id,
-        name=body.name,
-        phone=body.phone,
-        email=body.email,
+        name=name,
+        phone=phone,
+        email=email,
         amount=amount,
         is_anonymous=body.is_anonymous,
         added_by_organizer=True,
@@ -115,11 +150,17 @@ async def update_contributor(
 async def delete_contributor(
     slug: str,
     contributor_id: uuid.UUID,
+    confirm_remove_paid: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     campaign = await _get_campaign_scoped(slug, current_user.id, db)
     contributor = await _get_contributor_or_404(contributor_id, campaign.id, db)
+    if contributor.paid and not confirm_remove_paid:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Contributor has already paid. Pass confirm_remove_paid=true to confirm deletion.",
+        )
     await db.delete(contributor)
     await db.commit()
 

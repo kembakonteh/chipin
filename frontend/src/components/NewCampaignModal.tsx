@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
-import type { Campaign, CampaignTemplate, CampaignType, VisibilityMode } from '../types'
+import type { Campaign, CampaignTemplate, CampaignType, Org, VisibilityMode } from '../types'
 import CampaignTypeSelector from './CampaignTypeSelector'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -17,6 +17,7 @@ interface Form {
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
   template_id: string | null
+  org_id: string | null
 }
 
 interface BeneficiaryForm {
@@ -36,6 +37,7 @@ const INIT_FORM: Form = {
   visibility_mode: 'full_name',
   allow_anonymous_contributions: true,
   template_id: null,
+  org_id: null,
 }
 
 const INIT_BEN: BeneficiaryForm = {
@@ -68,12 +70,18 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
     staleTime: Infinity,
   })
 
+  const { data: orgs = [] } = useQuery<Org[]>({
+    queryKey: ['orgs'],
+    queryFn: () => api.get<Org[]>('/orgs').then(r => r.data as Org[]),
+  })
+
   function setF<K extends keyof Form>(k: K, v: Form[K]) {
     setForm(prev => ({ ...prev, [k]: v }))
   }
 
   function applyTemplate(t: CampaignTemplate) {
-    setForm({
+    setForm(prev => ({
+      ...prev,
       emoji: t.emoji,
       title: '',
       description: t.description_template,
@@ -83,7 +91,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
       visibility_mode: t.default_visibility_mode,
       allow_anonymous_contributions: t.default_anonymous,
       template_id: t.id,
-    })
+    }))
     setStep('details')
   }
 
@@ -111,6 +119,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
         ...(form.template_id ? { template_id: form.template_id } : {}),
+        ...(form.org_id ? { org_id: form.org_id } : {}),
       }).then(r => r.data),
     onSuccess: (campaign) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] })
@@ -354,6 +363,29 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               />
               <span className="text-sm text-gray-300">Allow anonymous contributions</span>
             </label>
+
+            {/* Org selector */}
+            {orgs.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Link to Organization</label>
+                <select
+                  value={form.org_id ?? ''}
+                  onChange={e => setF('org_id', e.target.value || null)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                    text-sm text-white focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">— No organization —</option>
+                  {orgs.map(o => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+                {form.org_id && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    All active org members will be auto-imported as contributors.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
