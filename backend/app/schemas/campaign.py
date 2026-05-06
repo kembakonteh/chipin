@@ -60,6 +60,7 @@ class CampaignUpdate(BaseModel):
     whatsapp_reminders_enabled: Optional[bool] = None
     collection_currency: Optional[CollectionCurrency] = None
     payout_currency: Optional[PayoutCurrency] = None
+    org_id: Optional[uuid.UUID] = None
 
 
 class CampaignResponse(BaseModel):

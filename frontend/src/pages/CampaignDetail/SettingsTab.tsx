@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
-import type { Campaign, CampaignType, Frequency, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
+import type { Campaign, CampaignType, Frequency, Org, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
 import CampaignTypeSelector from '../../components/CampaignTypeSelector'
 
 interface Form {
@@ -16,6 +16,7 @@ interface Form {
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
   whatsapp_reminders_enabled: boolean
+  org_id: string | null
 }
 
 function toForm(c: Campaign): Form {
@@ -29,6 +30,7 @@ function toForm(c: Campaign): Form {
     visibility_mode: c.visibility_mode,
     allow_anonymous_contributions: c.allow_anonymous_contributions,
     whatsapp_reminders_enabled: c.whatsapp_reminders_enabled,
+    org_id: c.org_id ?? null,
   }
 }
 
@@ -40,6 +42,11 @@ export default function SettingsTab({ campaign }: Props) {
   const [form, setForm] = useState<Form>(toForm(campaign))
   const qc = useQueryClient()
   const nav = useNavigate()
+
+  const { data: orgs = [] } = useQuery<Org[]>({
+    queryKey: ['orgs'],
+    queryFn: () => api.get<Org[]>('/orgs').then(r => r.data),
+  })
 
   useEffect(() => { setForm(toForm(campaign)) }, [campaign.id])
 
@@ -59,6 +66,7 @@ export default function SettingsTab({ campaign }: Props) {
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
         whatsapp_reminders_enabled: form.whatsapp_reminders_enabled,
+        org_id: form.org_id || null,
       }).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['campaign', campaign.slug] })
@@ -243,6 +251,39 @@ export default function SettingsTab({ campaign }: Props) {
           </div>
         </label>
       </div>
+
+      {/* Organisation */}
+      {orgs.length > 0 && (
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Organisation</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Link this campaign to a group so members are tracked across collections.
+            </p>
+          </div>
+          <select
+            value={form.org_id ?? ''}
+            onChange={e => set('org_id', e.target.value || null)}
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+              text-sm text-white focus:border-brand-500 focus:outline-none"
+          >
+            <option value="">— No organisation —</option>
+            {orgs.map(o => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          {form.org_id && form.org_id !== (campaign.org_id ?? null) && (
+            <p className="text-xs text-brand-400">
+              Save changes to link this campaign. Then use the Contributors tab to sync org members.
+            </p>
+          )}
+          {form.org_id && form.org_id === (campaign.org_id ?? null) && (
+            <p className="text-xs text-gray-500">
+              Linked. Go to the Contributors tab → Sync Org Members to import any members not yet on this campaign.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Save */}
       <button
