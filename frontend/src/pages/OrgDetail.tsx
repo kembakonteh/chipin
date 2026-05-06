@@ -363,21 +363,24 @@ function SettingsTab({ org }: { org: Org }) {
     },
   })
 
+  const inputCls = "w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+  const labelCls = "block text-xs text-gray-400 mb-1"
+
   return (
     <div className="max-w-lg space-y-6">
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Logo</p>
+        <p className={labelCls}>Logo</p>
         <div className="flex items-center gap-4">
           {org.logo_url ? (
             <img src={org.logo_url} alt="" className="w-16 h-16 rounded-xl object-cover" />
           ) : (
-            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center text-2xl">🏛️</div>
+            <div className="w-16 h-16 rounded-xl bg-gray-800 flex items-center justify-center text-2xl">🏛️</div>
           )}
           <input ref={logoRef} type="file" accept="image/*" className="hidden"
             onChange={e => e.target.files?.[0] && uploadLogo.mutate(e.target.files[0])} />
           <button
             onClick={() => logoRef.current?.click()}
-            className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+            className="px-4 py-2 border border-gray-700 rounded-lg text-sm text-gray-300 hover:text-white hover:border-gray-500 transition-colors"
           >
             {uploadLogo.isPending ? 'Uploading…' : 'Change Logo'}
           </button>
@@ -385,44 +388,41 @@ function SettingsTab({ org }: { org: Org }) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-        <input
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          value={name}
-          onChange={e => setName(e.target.value)}
-        />
+        <label className={labelCls}>Name</label>
+        <input className={inputCls} value={name} onChange={e => setName(e.target.value)} />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+        <label className={labelCls}>Type</label>
         <select
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className={inputCls}
           value={orgType}
           onChange={e => setOrgType(e.target.value as OrgType)}
         >
           {(Object.keys(ORG_TYPE_LABELS) as OrgType[]).map(t => (
-            <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>
+            <option key={t} value={t} className="bg-gray-800">{ORG_TYPE_LABELS[t]}</option>
           ))}
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <label className={labelCls}>Description</label>
         <textarea
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+          className={`${inputCls} resize-none`}
           rows={3}
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="e.g. Gambian community football club based in Seattle. We collect dues every season for kits, referee fees, and end-of-season events."
+          placeholder="e.g. A community sports club that collects dues each season for kits, match fees, and events."
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp Group Name</label>
+        <label className={labelCls}>WhatsApp Group Name</label>
         <input
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className={inputCls}
           value={whatsapp}
           onChange={e => setWhatsapp(e.target.value)}
+          placeholder="Optional — for quick reminders"
         />
       </div>
 
@@ -437,21 +437,21 @@ function SettingsTab({ org }: { org: Org }) {
             })
           }
           disabled={updateOrg.isPending}
-          className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+          className="px-5 py-2 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
         >
           {updateOrg.isPending ? 'Saving…' : 'Save Changes'}
         </button>
-        {saved && <p className="text-sm text-emerald-600">✓ Saved</p>}
+        {saved && <p className="text-sm text-brand-400">✓ Saved</p>}
       </div>
 
-      <div className="border-t border-gray-100 pt-4">
-        <p className="text-sm text-gray-400">
-          Public page: <Link to={`/o/${org.slug}`} className="text-emerald-600 hover:underline" target="_blank">/o/{org.slug}</Link>
+      <div className="border-t border-gray-800 pt-4">
+        <p className="text-sm text-gray-500">
+          Public page: <Link to={`/o/${org.slug}`} className="text-brand-400 hover:underline" target="_blank">/o/{org.slug}</Link>
         </p>
       </div>
 
       {/* Danger zone */}
-      <div className="border-t border-red-100 pt-6">
+      <div className="border-t border-red-900/40 pt-6">
         <p className="text-sm font-semibold text-red-600 mb-1">Danger Zone</p>
         <p className="text-xs text-gray-500 mb-3">
           Deleting this organisation removes the member roster. Your campaigns and all payment history are <span className="font-medium text-gray-700">not affected</span> — they stay intact as standalone campaigns. If you create a new organisation afterwards, you will need to re-add or re-import the members.
@@ -526,7 +526,7 @@ export default function OrgDetail() {
         {org.logo_url ? (
           <img src={org.logo_url} alt="" className="w-16 h-16 rounded-2xl object-cover flex-shrink-0" />
         ) : (
-          <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center text-3xl flex-shrink-0">
+          <div className="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center text-3xl flex-shrink-0">
             {org.org_type === 'sports' ? '⚽' :
              org.org_type === 'religious' ? '🕌' :
              org.org_type === 'professional' ? '💼' :
@@ -534,25 +534,25 @@ export default function OrgDetail() {
           </div>
         )}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{org.name}</h1>
+          <h1 className="text-2xl font-bold text-white">{org.name}</h1>
           {org.org_type && (
             <p className="text-sm text-gray-400 mt-0.5">{ORG_TYPE_LABELS[org.org_type]}</p>
           )}
           {org.description && (
-            <p className="text-sm text-gray-600 mt-1">{org.description}</p>
+            <p className="text-sm text-gray-400 mt-1">{org.description}</p>
           )}
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <div className="flex gap-1 border-b border-gray-800 mb-6">
         {tabs.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
-                ? 'border-emerald-600 text-emerald-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-brand-500 text-brand-400'
+                : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
             {t.label}

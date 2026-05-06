@@ -34,7 +34,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md text-gray-900">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900">Create Organization</h2>
           <p className="text-sm text-gray-500 mt-1">
@@ -70,7 +70,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
               rows={3}
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="e.g. Gambian community football club based in Seattle. We collect dues every season for kits, referee fees, and end-of-season events."
+              placeholder="e.g. A community sports club that collects dues each season for kits, match fees, and events."
             />
           </div>
           <div>
