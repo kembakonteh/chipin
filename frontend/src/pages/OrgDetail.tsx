@@ -232,10 +232,32 @@ function AddMembersModal({ orgSlug, onClose }: { orgSlug: string; onClose: () =>
 
 // ── Members tab ───────────────────────────────────────────────────────────────
 
+interface MemberCampaignRecord {
+  campaign_slug: string
+  campaign_title: string
+  campaign_emoji: string
+  campaign_created_at: string
+  amount_expected: string
+  paid: boolean
+  paid_via: string | null
+  paid_at: string | null
+  amount_paid: string | null
+}
+
+interface MemberHistory {
+  member_id: string
+  member_name: string
+  member_phone: string | null
+  total: number
+  paid: number
+  campaigns: MemberCampaignRecord[]
+}
+
 function MembersTab({ orgSlug }: { orgSlug: string }) {
   const qc = useQueryClient()
   const [showAdd, setShowAdd] = useState(false)
   const [search, setSearch] = useState('')
+  const [historyMember, setHistoryMember] = useState<OrgMember | null>(null)
 
   const { data: members = [], isLoading } = useQuery<OrgMember[]>({
     queryKey: ['org-members', orgSlug],
@@ -304,9 +326,21 @@ function MembersTab({ orgSlug }: { orgSlug: string }) {
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">
-                    <span className="text-brand-400 font-medium">{m.paid_campaigns}</span>
-                    <span className="text-gray-500">/{m.total_campaigns} paid</span>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryMember(m)}
+                      className="group flex items-center gap-1 hover:underline underline-offset-2"
+                      title="View payment history"
+                    >
+                      <span className={`font-medium ${m.paid_campaigns === m.total_campaigns && m.total_campaigns > 0 ? 'text-brand-400' : m.paid_campaigns === 0 && m.total_campaigns > 0 ? 'text-red-400' : 'text-brand-400'}`}>
+                        {m.paid_campaigns}
+                      </span>
+                      <span className="text-gray-500">/{m.total_campaigns} paid</span>
+                      {m.total_campaigns > 0 && (
+                        <span className="text-gray-600 group-hover:text-gray-400 text-xs ml-0.5 transition-colors">↗</span>
+                      )}
+                    </button>
                   </td>
                   <td className="px-4 py-3">
                     <button
@@ -330,7 +364,147 @@ function MembersTab({ orgSlug }: { orgSlug: string }) {
       )}
 
       {showAdd && <AddMembersModal orgSlug={orgSlug} onClose={() => setShowAdd(false)} />}
+      {historyMember && (
+        <MemberHistoryPanel
+          orgSlug={orgSlug}
+          member={historyMember}
+          onClose={() => setHistoryMember(null)}
+        />
+      )}
     </div>
+  )
+}
+
+// ── Member history panel ───────────────────────────────────────────────────────
+
+const PAID_VIA_LABEL: Record<string, string> = {
+  zelle: 'Zelle',
+  cashapp: 'CashApp',
+  cash: 'Cash',
+  card: 'Card',
+  manual: 'Other',
+}
+
+function MemberHistoryPanel({ orgSlug, member, onClose }: {
+  orgSlug: string
+  member: OrgMember
+  onClose: () => void
+}) {
+  const { data, isLoading } = useQuery<MemberHistory>({
+    queryKey: ['member-history', orgSlug, member.id],
+    queryFn: () => api.get<MemberHistory>(`/orgs/${orgSlug}/members/${member.id}/history`).then(getData),
+  })
+
+  const paidRate = data && data.total > 0 ? Math.round((data.paid / data.total) * 100) : 0
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Slide-over panel */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-gray-900 border-l border-gray-800 flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-gray-800">
+          <div>
+            <h2 className="text-base font-semibold text-white">{member.name}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Payment history across all campaigns</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-500 hover:text-white text-xl leading-none transition-colors mt-0.5"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Summary bar */}
+        {data && (
+          <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                <span>{data.paid} of {data.total} paid</span>
+                <span className={paidRate === 100 ? 'text-brand-400' : paidRate < 50 ? 'text-red-400' : 'text-yellow-400'}>
+                  {paidRate}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-gray-800 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    paidRate === 100 ? 'bg-brand-500' : paidRate < 50 ? 'bg-red-500' : 'bg-yellow-500'
+                  }`}
+                  style={{ width: `${paidRate}%` }}
+                />
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-2xl font-bold text-white">{data.paid}<span className="text-gray-500 text-base font-normal">/{data.total}</span></p>
+              <p className="text-xs text-gray-500">paid</p>
+            </div>
+          </div>
+        )}
+
+        {/* Campaign list */}
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+          {isLoading && (
+            <div className="text-center py-10 text-gray-400 text-sm">Loading…</div>
+          )}
+          {data?.campaigns.length === 0 && (
+            <div className="text-center py-10 text-gray-500 text-sm">
+              No campaigns found for this org yet.
+            </div>
+          )}
+          {data?.campaigns.map((c, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${
+                c.paid
+                  ? 'bg-brand-900/20 border-brand-800/40'
+                  : 'bg-gray-800/50 border-gray-700/50'
+              }`}
+            >
+              {/* Status icon */}
+              <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                c.paid ? 'bg-brand-600/30 text-brand-300' : 'bg-gray-700 text-gray-500'
+              }`}>
+                {c.paid ? '✓' : '✗'}
+              </div>
+
+              {/* Campaign info */}
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium truncate ${c.paid ? 'text-white' : 'text-gray-400'}`}>
+                  {c.campaign_emoji} {c.campaign_title}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {new Date(c.campaign_created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  {c.paid && c.paid_via && (
+                    <span className="ml-2 text-gray-600">· via {PAID_VIA_LABEL[c.paid_via] ?? c.paid_via}</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Amount */}
+              <div className="text-right shrink-0">
+                <p className={`text-sm font-semibold tabular-nums ${c.paid ? 'text-brand-400' : 'text-gray-600'}`}>
+                  ${parseFloat(c.amount_expected).toFixed(2)}
+                </p>
+                {!c.paid && (
+                  <p className="text-xs text-red-400/70 mt-0.5">unpaid</p>
+                )}
+                {c.paid && c.paid_at && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {new Date(c.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   )
 }
 

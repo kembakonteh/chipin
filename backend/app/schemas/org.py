@@ -124,6 +124,27 @@ class CsvImportResponse(BaseModel):
     skipped: int
 
 
+class MemberCampaignRecord(BaseModel):
+    campaign_slug: str
+    campaign_title: str
+    campaign_emoji: str
+    campaign_created_at: datetime
+    amount_expected: Decimal
+    paid: bool
+    paid_via: Optional[str] = None
+    paid_at: Optional[datetime] = None
+    amount_paid: Optional[Decimal] = None
+
+
+class MemberHistoryResponse(BaseModel):
+    member_id: uuid.UUID
+    member_name: str
+    member_phone: Optional[str]
+    total: int
+    paid: int
+    campaigns: List[MemberCampaignRecord]
+
+
 class PublicOrgCampaign(BaseModel):
     slug: str
     title: str

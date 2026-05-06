@@ -36,6 +36,8 @@ from app.schemas.org import (
     CampaignBriefWithPaid,
     ContributorBrief,
     CsvImportResponse,
+    MemberCampaignRecord,
+    MemberHistoryResponse,
     MembershipStatusResponse,
     OrgCreate,
     OrgMemberBrief,
@@ -477,6 +479,70 @@ async def remove_member(
     # Soft delete
     member.is_active = False
     await db.commit()
+
+
+@router.get("/{slug}/members/{member_id}/history", response_model=MemberHistoryResponse)
+async def member_payment_history(
+    slug: str,
+    member_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    org = await _get_org_or_404(slug, db)
+    await _require_org_admin(org, current_user, db)
+
+    result = await db.execute(
+        select(OrgMember).where(OrgMember.id == member_id, OrgMember.org_id == org.id)
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    # All campaigns for this org, newest first
+    campaigns_result = await db.execute(
+        select(Campaign)
+        .where(Campaign.org_id == org.id)
+        .order_by(Campaign.created_at.desc())
+    )
+    campaigns = campaigns_result.scalars().all()
+
+    # All contributors matching this member's phone across org campaigns
+    contributor_map: dict[uuid.UUID, Contributor] = {}
+    if member.phone and campaigns:
+        campaign_ids = [c.id for c in campaigns]
+        contrib_result = await db.execute(
+            select(Contributor).where(
+                Contributor.campaign_id.in_(campaign_ids),
+                Contributor.phone == member.phone,
+            )
+        )
+        for c in contrib_result.scalars().all():
+            contributor_map[c.campaign_id] = c
+
+    records: list[MemberCampaignRecord] = []
+    for c in campaigns:
+        contrib = contributor_map.get(c.id)
+        records.append(MemberCampaignRecord(
+            campaign_slug=c.slug,
+            campaign_title=c.title,
+            campaign_emoji=c.emoji,
+            campaign_created_at=c.created_at,
+            amount_expected=contrib.amount if contrib else (c.amount_per_person or Decimal("0")),
+            paid=contrib.paid if contrib else False,
+            paid_via=contrib.paid_via.value if contrib and contrib.paid_via else None,
+            paid_at=contrib.paid_at if contrib else None,
+            amount_paid=contrib.amount if (contrib and contrib.paid) else None,
+        ))
+
+    paid_count = sum(1 for r in records if r.paid)
+    return MemberHistoryResponse(
+        member_id=member.id,
+        member_name=member.name,
+        member_phone=member.phone,
+        total=len(records),
+        paid=paid_count,
+        campaigns=records,
+    )
 
 
 @router.post("/{slug}/members/import-csv", response_model=CsvImportResponse)
