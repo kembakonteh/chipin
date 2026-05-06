@@ -255,14 +255,14 @@ function MembersTab({ orgSlug }: { orgSlug: string }) {
     <div>
       <div className="flex items-center gap-3 mb-4">
         <input
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="flex-1 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white bg-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
           placeholder="Search members…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
         <button
           onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 whitespace-nowrap"
+          className="px-4 py-2 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-500 transition-colors whitespace-nowrap"
         >
           + Add Members
         </button>
@@ -275,47 +275,47 @@ function MembersTab({ orgSlug }: { orgSlug: string }) {
           {search ? 'No members match.' : 'No members yet. Add some above.'}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+        <div className="rounded-xl border border-gray-800 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-800 border-b border-gray-700">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Phone</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Role</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Campaigns</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-400">Name</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-400">Phone</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-400">Role</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-400">Campaigns</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-400">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-800">
               {filtered.map(m => (
-                <tr key={m.id} className={`hover:bg-gray-50 ${!m.is_active ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{m.name}</td>
-                  <td className="px-4 py-3 text-gray-500">{m.phone || '—'}</td>
+                <tr key={m.id} className={`bg-gray-900 hover:bg-gray-800 transition-colors ${!m.is_active ? 'opacity-50' : ''}`}>
+                  <td className="px-4 py-3 font-medium text-white">{m.name}</td>
+                  <td className="px-4 py-3 text-gray-400">{m.phone || '—'}</td>
                   <td className="px-4 py-3">
                     <select
-                      className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+                      className="text-xs border border-gray-600 rounded px-2 py-1 bg-gray-800 text-gray-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
                       value={m.role}
                       onChange={e => updateMember.mutate({ id: m.id, data: { role: e.target.value } })}
                     >
                       {(Object.keys(ROLE_LABELS) as OrgMemberRole[]).map(r => (
-                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        <option key={r} value={r} className="bg-gray-800">{ROLE_LABELS[r]}</option>
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    <span className="text-emerald-600 font-medium">{m.paid_campaigns}</span>
-                    <span className="text-gray-400">/{m.total_campaigns} paid</span>
+                  <td className="px-4 py-3 text-gray-400">
+                    <span className="text-brand-400 font-medium">{m.paid_campaigns}</span>
+                    <span className="text-gray-500">/{m.total_campaigns} paid</span>
                   </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() =>
                         updateMember.mutate({ id: m.id, data: { is_active: !m.is_active } })
                       }
-                      className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      className={`text-xs px-2 py-1 rounded-full font-medium transition-colors ${
                         m.is_active
-                          ? 'bg-emerald-100 text-emerald-700 hover:bg-red-100 hover:text-red-700'
-                          : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'
-                      } transition-colors`}
+                          ? 'bg-green-900/50 text-green-400 hover:bg-red-900/50 hover:text-red-400'
+                          : 'bg-gray-800 text-gray-500 hover:bg-green-900/50 hover:text-green-400'
+                      }`}
                     >
                       {m.is_active ? 'Active' : 'Inactive'}
                     </button>

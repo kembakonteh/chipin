@@ -221,6 +221,19 @@ async def update_org(
     await _require_org_admin(org, current_user, db)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(org, field, value)
+
+    # Sync org contact phone to the owner's own member record
+    if body.phone is not None:
+        owner_member = await db.execute(
+            select(OrgMember).where(
+                OrgMember.org_id == org.id,
+                OrgMember.user_id == current_user.id,
+            )
+        )
+        member = owner_member.scalar_one_or_none()
+        if member:
+            member.phone = body.phone or None
+
     await db.commit()
     await db.refresh(org)
     count_result = await db.execute(
