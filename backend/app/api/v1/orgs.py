@@ -44,6 +44,7 @@ from app.schemas.org import (
     OrgMemberUpdate,
     OrgResponse,
     OrgStatsResponse,
+    OrgUpdate,
     PublicOrgCampaign,
     PublicOrgResponse,
     UpdateMemberResponse,
@@ -212,11 +213,10 @@ async def get_org(
 @router.patch("/{slug}", response_model=OrgResponse)
 async def update_org(
     slug: str,
-    body: "OrgUpdate",
+    body: OrgUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.schemas.org import OrgUpdate  # noqa: F811
     org = await _get_org_or_404(slug, db)
     await _require_org_admin(org, current_user, db)
     for field, value in body.model_dump(exclude_unset=True).items():
