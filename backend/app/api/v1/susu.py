@@ -1,14 +1,17 @@
 import asyncio
+import csv
+import io
 import logging
 import random
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,6 +94,7 @@ def _build_cycle_response(cycle: SusuCycle) -> SusuCycleResponse:
             paid=c.paid,
             paid_via=c.paid_via,
             paid_at=c.paid_at,
+            missed=c.missed,  # Feature 4
         )
         for c in cycle.contributions
     ]
@@ -149,6 +153,9 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
         next_contribution_date=group.next_contribution_date,
         next_payout_date=group.next_payout_date,
         created_at=group.created_at,
+        missed_policy=group.missed_policy,
+        late_fee_pct=group.late_fee_pct,
+        rules=group.rules,
         members=members,
         current_cycle_detail=current_cycle_detail,
         cycle_summaries=summaries,
@@ -187,6 +194,9 @@ async def create_susu_group(
         total_cycles=body.total_cycles,
         payout_order=body.payout_order,
         start_date=body.start_date,
+        missed_policy=body.missed_policy,
+        late_fee_pct=body.late_fee_pct,
+        rules=body.rules,
     )
     db.add(group)
     await db.commit()
@@ -244,10 +254,14 @@ async def update_susu_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
     if group.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
-    if group.status != SusuStatus.forming:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only update groups in forming state")
+    update_data = body.model_dump(exclude_unset=True)
+    # Rules and missed policy can be updated at any time;
+    # other fields (name, payout_order) require the group to still be forming
+    restricted_fields = {k for k in update_data if k not in ('rules', 'missed_policy', 'late_fee_pct')}
+    if restricted_fields and group.status != SusuStatus.forming:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only update group details in forming state")
 
-    for k, v in body.model_dump(exclude_unset=True).items():
+    for k, v in update_data.items():
         setattr(group, k, v)
     await db.commit()
     await db.refresh(group)
@@ -309,6 +323,7 @@ async def add_susu_member(
         phone=body.phone,
         email=body.email,
         payout_position=body.payout_position,
+        slots=body.slots,  # Feature 1: multiple slots/hands
     )
     db.add(member)
     group.total_members += 1
@@ -408,11 +423,22 @@ async def start_susu(
     if n > group.total_cycles:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="More members than total cycles")
 
-    # Determine payout order
+    # Feature 1: calculate total slots and pot amount based on slots
+    total_slots = sum(m.slots for m in members)
+    pot_amount = sum(m.slots * group.contribution_amount for m in members)
+
+    # Override total_cycles to equal total_slots so each slot gets a payout
+    group.total_cycles = total_slots
+
+    # Determine payout order — build a slot-expanded list for recipient assignment
     if group.payout_order == SusuPayoutOrder.random:
         random.shuffle(members)
         for i, m in enumerate(members, start=1):
             m.payout_position = i
+        # Expand by slots for recipient assignment
+        payout_slots: List[SusuMember] = []
+        for m in members:
+            payout_slots.extend([m] * m.slots)
     elif group.payout_order == SusuPayoutOrder.fixed:
         # Sort by payout_position (nulls go to end), then assign sequentially
         members_with_pos = sorted(members, key=lambda m: (m.payout_position is None, m.payout_position or 0))
@@ -422,13 +448,19 @@ async def start_susu(
             m.payout_position = next_pos
             next_pos += 1
         members = sorted(members, key=lambda m: m.payout_position or 999)
-
-    # Build cycle → recipient mapping (cycles wrap around if n < total_cycles)
-    pot_amount = group.contribution_amount * n
+        # Expand by slots for recipient assignment
+        payout_slots = []
+        for m in members:
+            payout_slots.extend([m] * m.slots)
+    else:
+        # bid or other — treat like fixed
+        payout_slots = []
+        for m in members:
+            payout_slots.extend([m] * m.slots)
 
     cycle_records = []
     for cycle_num in range(1, group.total_cycles + 1):
-        recipient = members[(cycle_num - 1) % n]
+        recipient = payout_slots[(cycle_num - 1) % total_slots]
         due_date = compute_susu_due_date(group.start_date, group.frequency, cycle_num - 1)
         cycle = SusuCycle(
             group_id=group.id,
@@ -442,13 +474,13 @@ async def start_susu(
 
     await db.flush()  # get cycle IDs
 
-    # Create contribution records for cycle 1
+    # Create contribution records for cycle 1 (each member contributes slots × base amount)
     cycle1 = cycle_records[0]
     for member in group.members:
         db.add(SusuContribution(
             cycle_id=cycle1.id,
             member_id=member.id,
-            amount=group.contribution_amount,
+            amount=member.slots * group.contribution_amount,
         ))
 
     group.status = SusuStatus.active
@@ -539,7 +571,11 @@ async def mark_payout_sent(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    result = await db.execute(
+        select(SusuGroup)
+        .options(selectinload(SusuGroup.members))
+        .where(SusuGroup.slug == slug)
+    )
     group = result.scalar_one_or_none()
     if not group or group.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
@@ -560,11 +596,49 @@ async def mark_payout_sent(
     if recipient:
         recipient.has_received_payout = True
 
+    # Find next cycle due date for the summary message
+    next_cycle_result = await db.execute(
+        select(SusuCycle).where(
+            SusuCycle.group_id == group.id,
+            SusuCycle.cycle_number == cycle_number + 1,
+        )
+    )
+    next_cycle = next_cycle_result.scalar_one_or_none()
+    next_due_str = str(next_cycle.due_date) if next_cycle else "N/A"
+
     await db.commit()
     await db.refresh(cycle)
 
     # Get recipient name
     rname = recipient.name if recipient else "Unknown"
+    pot = cycle.pot_amount
+    currency = "$"
+
+    # Feature 7: Personal payout receipt to recipient
+    if recipient and recipient.phone:
+        receipt_msg = (
+            f"Hi {rname}! Your Susu payout of {currency}{pot:.2f} from '{group.name}' "
+            f"has been sent. Enjoy!"
+        )
+        try:
+            from app.workers.tasks import _send_whatsapp_text
+            await _send_whatsapp_text(recipient.phone, receipt_msg)
+        except Exception as exc:
+            logger.warning("Failed to send payout receipt WhatsApp to %s: %s", recipient.phone, exc)
+
+    # Feature 6: Cycle summary to all members
+    summary_msg = (
+        f"Cycle {cycle_number} complete! {rname} received {currency}{pot:.2f}. "
+        f"Next cycle due {next_due_str}. Keep it up!"
+    )
+    for member in group.members:
+        if member.phone and member.id != (recipient.id if recipient else None):
+            try:
+                from app.workers.tasks import _send_whatsapp_text
+                await _send_whatsapp_text(member.phone, summary_msg)
+            except Exception as exc:
+                logger.warning("Failed to send cycle summary WhatsApp to %s: %s", member.phone, exc)
+
     return SusuCycleSummary(
         id=cycle.id,
         cycle_number=cycle.cycle_number,
@@ -575,6 +649,56 @@ async def mark_payout_sent(
         recipient_name=rname,
         payout_sent_at=cycle.payout_sent_at,
         status=cycle.status,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/cycles/{cycle_number}/members/{member_id}/mark-missed
+# Feature 4: Mark a contribution as missed
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/cycles/{cycle_number}/members/{member_id}/mark-missed", response_model=SusuContributionResponse)
+async def mark_contribution_missed(
+    slug: str,
+    cycle_number: int,
+    member_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group or group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    cycle_result = await db.execute(
+        select(SusuCycle)
+        .options(selectinload(SusuCycle.contributions).selectinload(SusuContribution.member))
+        .where(SusuCycle.group_id == group.id, SusuCycle.cycle_number == cycle_number)
+    )
+    cycle = cycle_result.scalar_one_or_none()
+    if not cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cycle not found")
+
+    contrib = next((c for c in cycle.contributions if c.member_id == member_id), None)
+    if not contrib:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution record not found for member")
+
+    contrib.missed = True
+    contrib.paid = False
+
+    await db.commit()
+    await db.refresh(contrib)
+
+    return SusuContributionResponse(
+        id=contrib.id,
+        cycle_id=contrib.cycle_id,
+        member_id=contrib.member_id,
+        member_name=contrib.member.name if contrib.member else "Unknown",
+        amount=contrib.amount,
+        paid=contrib.paid,
+        paid_via=contrib.paid_via,
+        paid_at=contrib.paid_at,
+        missed=contrib.missed,
     )
 
 
@@ -648,7 +772,7 @@ async def advance_cycle(
             db.add(SusuContribution(
                 cycle_id=next_cycle.id,
                 member_id=member.id,
-                amount=group.contribution_amount,
+                amount=member.slots * group.contribution_amount,  # Feature 1: slots
             ))
 
     group.current_cycle = next_cycle_number
@@ -690,18 +814,31 @@ async def susu_member_history(
     rows = []
     for m in members:
         paid_cycles = []
+        # Feature 3: reliability score — cycles due so far vs paid on time
+        due_so_far = 0
+        paid_on_time = 0
         for cycle in cycles_sorted:
             contrib = contrib_lookup.get((cycle.id, m.id))
+            is_due = cycle.cycle_number <= group.current_cycle
+            c_paid = contrib.paid if contrib else False
+            c_missed = contrib.missed if contrib else False
             paid_cycles.append({
                 "cycle_number": cycle.cycle_number,
-                "paid": contrib.paid if contrib else False,
+                "paid": c_paid,
+                "missed": c_missed,
                 "paid_via": contrib.paid_via.value if contrib and contrib.paid_via else None,
             })
+            if is_due:
+                due_so_far += 1
+                if c_paid:
+                    paid_on_time += 1
+        reliability_pct = round((paid_on_time / due_so_far) * 100) if due_so_far > 0 else None
         rows.append({
             "member_id": str(m.id),
             "member_name": m.name,
             "payout_position": m.payout_position,
             "total_contributed": str(m.total_contributed),
+            "reliability_pct": reliability_pct,
             "cycles": paid_cycles,
         })
 
@@ -710,6 +847,57 @@ async def susu_member_history(
         "current_cycle": group.current_cycle,
         "members": rows,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /susu/{slug}/export — CSV export of all contributions (Feature 9)
+# ---------------------------------------------------------------------------
+
+@router.get("/susu/{slug}/export")
+async def export_susu_csv(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group = await _get_group_or_404(slug, db)
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    cycles_sorted = sorted(group.cycles, key=lambda c: c.cycle_number)
+    member_map = {m.id: m for m in group.members}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Cycle #", "Due Date", "Member Name", "Phone",
+        "Amount", "Paid", "Paid Via", "Paid At", "Missed",
+    ])
+
+    for cycle in cycles_sorted:
+        for contrib in cycle.contributions:
+            member = member_map.get(contrib.member_id)
+            writer.writerow([
+                cycle.cycle_number,
+                str(cycle.due_date),
+                member.name if member else "Unknown",
+                member.phone if member else "",
+                str(contrib.amount),
+                "Yes" if contrib.paid else "No",
+                contrib.paid_via.value if contrib.paid_via else "",
+                contrib.paid_at.strftime("%Y-%m-%d %H:%M") if contrib.paid_at else "",
+                "Yes" if contrib.missed else "No",
+            ])
+
+    today_str = date.today().isoformat()
+    safe_name = re.sub(r"[^\w\s-]", "", group.name).strip().replace(" ", "-")
+    filename = f"susu-{safe_name}-{today_str}.csv"
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -764,7 +952,7 @@ async def initiate_susu_payment(
     if contrib.paid:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
 
-    amount_cents = int(group.contribution_amount * 100)
+    amount_cents = int(member.slots * group.contribution_amount * 100)  # Feature 1: slots
     currency = "usd"
 
     success_url = f"{settings.FRONTEND_URL}/s/{slug}?paid=1"

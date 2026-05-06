@@ -15,6 +15,7 @@ export interface SusuMember {
   has_received_payout: boolean
   total_contributed: string
   joined_at: string
+  slots: number  // Feature 1: multiple slots/hands
 }
 
 export interface SusuContribution {
@@ -26,6 +27,7 @@ export interface SusuContribution {
   paid: boolean
   paid_via: SusuPaidVia | null
   paid_at: string | null
+  missed: boolean  // Feature 4: missed payment flag
 }
 
 export interface SusuCycleSummary {
@@ -62,6 +64,11 @@ export interface SusuGroup {
   next_contribution_date: string | null
   next_payout_date: string | null
   created_at: string
+  // Feature 4: missed payment policy
+  missed_policy: string
+  late_fee_pct: string | null
+  // Feature 8: group rules
+  rules: string | null
 }
 
 export interface SusuDetail extends SusuGroup {

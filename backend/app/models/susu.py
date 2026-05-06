@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -98,6 +98,11 @@ class SusuGroup(Base, UUIDMixin):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Feature 4: missed payment policy
+    missed_policy: Mapped[str] = mapped_column(String(50), nullable=False, default='none', server_default="'none'")
+    late_fee_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    # Feature 8: group rules
+    rules: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     owner: Mapped["User"] = relationship("User")
     org: Mapped[Optional["Org"]] = relationship("Org")
@@ -131,6 +136,8 @@ class SusuMember(Base, UUIDMixin):
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Feature 1: multiple slots/hands
+    slots: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     group: Mapped["SusuGroup"] = relationship("SusuGroup", back_populates="members")
 
@@ -182,3 +189,5 @@ class SusuContribution(Base, UUIDMixin):
 
     cycle: Mapped["SusuCycle"] = relationship("SusuCycle", back_populates="contributions")
     member: Mapped["SusuMember"] = relationship("SusuMember")
+    # Feature 4: missed payment flag
+    missed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

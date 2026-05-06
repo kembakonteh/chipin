@@ -53,26 +53,44 @@ function ContributionRow({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
   })
 
+  // Feature 4: mark-missed
+  const markMissed = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${groupSlug}/cycles/${cycleNumber}/members/${contribution.member_id}/mark-missed`).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
+  })
+
+  const rowClass = contribution.missed
+    ? 'bg-red-900/20 border border-red-800/30'
+    : contribution.paid
+      ? 'bg-emerald-900/20 border border-emerald-800/30'
+      : 'bg-gray-800 border border-gray-700'
+
   return (
-    <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm ${
-      contribution.paid ? 'bg-emerald-900/20 border border-emerald-800/30' : 'bg-gray-800 border border-gray-700'
-    }`}>
+    <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm ${rowClass}`}>
       <div className="flex items-center gap-2">
-        <span className={`text-base ${contribution.paid ? '' : 'opacity-30'}`}>
-          {contribution.paid ? '✓' : '○'}
+        <span className={`text-base ${contribution.paid ? '' : contribution.missed ? 'text-red-400' : 'opacity-30'}`}>
+          {contribution.paid ? '✓' : contribution.missed ? '✗' : '○'}
         </span>
-        <span className={contribution.paid ? 'text-white' : 'text-gray-400'}>
+        <span className={contribution.paid ? 'text-white' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
           {contribution.member_name}
         </span>
+        {contribution.missed && (
+          <span className="text-xs text-red-400/70 font-medium">Missed</span>
+        )}
         {contribution.paid && contribution.paid_via && (
           <span className="text-xs text-gray-500 capitalize">via {contribution.paid_via}</span>
         )}
       </div>
       <div className="flex items-center gap-2">
-        <span className={contribution.paid ? 'text-emerald-400 font-medium text-xs' : 'text-gray-500 text-xs'}>
+        <span className={
+          contribution.paid ? 'text-emerald-400 font-medium text-xs'
+          : contribution.missed ? 'text-red-400 text-xs'
+          : 'text-gray-500 text-xs'
+        }>
           {fmt(parseFloat(contribution.amount))}
         </span>
-        {!contribution.paid && isCurrentCycle && (
+        {!contribution.paid && !contribution.missed && isCurrentCycle && (
           <div className="flex items-center gap-1">
             <select
               value={payVia}
@@ -90,6 +108,14 @@ function ContributionRow({
               className="text-xs px-2 py-1 rounded bg-brand-700 text-brand-200 hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               {markPaid.isPending ? '…' : 'Mark paid'}
+            </button>
+            <button
+              onClick={() => markMissed.mutate()}
+              disabled={markMissed.isPending}
+              className="text-xs px-2 py-1 rounded bg-red-900/60 text-red-300 hover:bg-red-800/60 disabled:opacity-50 transition-colors"
+              title="Mark as missed"
+            >
+              {markMissed.isPending ? '…' : '✗'}
             </button>
           </div>
         )}
@@ -137,13 +163,25 @@ interface HistoryRow {
   member_name: string
   payout_position: number | null
   total_contributed: string
-  cycles: { cycle_number: number; paid: boolean; paid_via: string | null }[]
+  reliability_pct: number | null  // Feature 3
+  cycles: { cycle_number: number; paid: boolean; missed: boolean; paid_via: string | null }[]
 }
 
 interface HistoryData {
   total_cycles: number
   current_cycle: number
   members: HistoryRow[]
+}
+
+// Feature 3: Reliability badge
+function ReliabilityBadge({ pct }: { pct: number | null }) {
+  if (pct === null) return null
+  const color = pct >= 90 ? 'text-emerald-400' : pct >= 60 ? 'text-yellow-400' : 'text-red-400'
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${color}`} title={`Reliability: ${pct}%`}>
+      ●{pct}%
+    </span>
+  )
 }
 
 function HistoryTab({ groupSlug }: { groupSlug: string }) {
@@ -189,10 +227,13 @@ function HistoryTab({ groupSlug }: { groupSlug: string }) {
             return (
               <tr key={m.member_id} className="hover:bg-gray-800/30 transition-colors">
                 <td className="px-3 py-2.5 whitespace-nowrap">
-                  <span className="text-white font-medium">{m.member_name}</span>
-                  {m.payout_position && (
-                    <span className="text-gray-600 ml-1.5">#{m.payout_position}</span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white font-medium">{m.member_name}</span>
+                    {m.payout_position && (
+                      <span className="text-gray-600">#{m.payout_position}</span>
+                    )}
+                    <ReliabilityBadge pct={m.reliability_pct} />
+                  </div>
                 </td>
                 {m.cycles.map(c => (
                   <td key={c.cycle_number} className="px-2 py-2.5 text-center">
@@ -200,6 +241,8 @@ function HistoryTab({ groupSlug }: { groupSlug: string }) {
                       <span className="text-gray-700">–</span>
                     ) : c.paid ? (
                       <span className="text-emerald-400" title={c.paid_via ?? ''}>✓</span>
+                    ) : c.missed ? (
+                      <span className="text-red-500" title="Missed">✗</span>
                     ) : (
                       <span className="text-red-400/70">✗</span>
                     )}
@@ -234,6 +277,7 @@ interface AddMemberForm {
   name: string
   phone: string
   email: string
+  slots: string
 }
 
 export default function SusuDetail() {
@@ -242,8 +286,11 @@ export default function SusuDetail() {
   const qc = useQueryClient()
   const [tab, setTab] = useState<DetailTab>('current')
   const [showAdd, setShowAdd] = useState(false)
-  const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '' })
+  const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '', slots: '1' })
   const [addError, setAddError] = useState('')
+  // Feature 4: rules edit mode
+  const [editingRules, setEditingRules] = useState(false)
+  const [rulesText, setRulesText] = useState('')
 
   const addMember = useMutation({
     mutationFn: () =>
@@ -251,10 +298,11 @@ export default function SusuDetail() {
         name: addForm.name.trim(),
         phone: addForm.phone.trim(),
         email: addForm.email.trim() || null,
+        slots: parseInt(addForm.slots) || 1,
       }).then(getData),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['susu', slug] })
-      setAddForm({ name: '', phone: '', email: '' })
+      setAddForm({ name: '', phone: '', email: '', slots: '1' })
       setAddError('')
       setShowAdd(false)
     },
@@ -288,6 +336,31 @@ export default function SusuDetail() {
       qc.invalidateQueries({ queryKey: ['susu-history', slug] })
     },
   })
+
+  // Feature 8: Save group rules
+  const saveRules = useMutation({
+    mutationFn: (newRules: string) =>
+      api.patch(`/susu/${slug}`, { rules: newRules || null }).then(getData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      setEditingRules(false)
+    },
+  })
+
+  // Feature 9: Export CSV — use axios api instance so auth headers are injected
+  function handleExportCsv() {
+    api.get(`/susu/${slug}/export`, { responseType: 'blob' }).then(response => {
+      const blob = new Blob([response.data], { type: 'text/csv' })
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = `susu-${slug}.csv`
+      a.click()
+      URL.revokeObjectURL(blobUrl)
+    }).catch(() => {
+      alert('Failed to export CSV')
+    })
+  }
 
   if (isLoading) {
     return <Layout><div className="text-center py-20 text-gray-500">Loading…</div></Layout>
@@ -474,9 +547,18 @@ export default function SusuDetail() {
         {/* History tab */}
         {tab === 'history' && group.status === 'active' && (
           <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800">
-              <h2 className="font-semibold text-white">Contribution History</h2>
-              <p className="text-xs text-gray-500 mt-0.5">✓ paid · ✗ missed · – future</p>
+            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-white">Contribution History</h2>
+                <p className="text-xs text-gray-500 mt-0.5">✓ paid · ✗ missed · – future</p>
+              </div>
+              {/* Feature 9: Export CSV */}
+              <button
+                onClick={handleExportCsv}
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+              >
+                Export CSV
+              </button>
             </div>
             <div className="p-4">
               <HistoryTab groupSlug={slug!} />
@@ -507,7 +589,7 @@ export default function SusuDetail() {
           <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
               <h2 className="font-semibold text-white">Members ({group.total_members})</h2>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap justify-end">
                 {group.status !== 'completed' && (
                   <button
                     onClick={() => { setShowAdd(s => !s); setAddError('') }}
@@ -517,6 +599,16 @@ export default function SusuDetail() {
                     {showAdd ? '✕ Cancel' : '＋ Add member'}
                   </button>
                 )}
+                {/* Feature 5: WhatsApp invite */}
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Join our Susu group '${group.name}' on ChipIn! Pay your contribution online here: ${window.location.origin}/s/${slug}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-900/30 text-emerald-300
+                    hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors"
+                >
+                  Invite via WhatsApp
+                </a>
                 <button
                   onClick={() => navigate(`/s/${slug}`)}
                   className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
@@ -558,14 +650,29 @@ export default function SusuDetail() {
                       text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
                   />
                 </div>
-                <input
-                  type="email"
-                  placeholder="Email (optional)"
-                  value={addForm.email}
-                  onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
-                    text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="email"
+                    placeholder="Email (optional)"
+                    value={addForm.email}
+                    onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
+                  {/* Feature 1: slots */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-400 whitespace-nowrap">Hands (slots):</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={addForm.slots}
+                      onChange={e => setAddForm(f => ({ ...f, slots: e.target.value }))}
+                      className="w-16 rounded-lg border border-gray-700 bg-gray-800 px-2 py-2
+                        text-sm text-white text-center focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
                 {addError && <p className="text-xs text-red-400">{addError}</p>}
                 <button
                   type="submit"
@@ -587,7 +694,9 @@ export default function SusuDetail() {
               {group.members.map(m => {
                 const currentContrib = cycle?.contributions.find(c => c.member_id === m.id)
                 const isPaid = currentContrib?.paid ?? false
+                const isMissed = currentContrib?.missed ?? false
                 const isRecipient = cycle?.recipient_member_id === m.id
+                const memberContrib = parseFloat(currentContrib?.amount ?? '0') || (m.slots * parseFloat(group.contribution_amount))
                 return (
                   <div key={m.id} className="flex items-center justify-between px-5 py-3">
                     <div className="flex items-center gap-3">
@@ -595,7 +704,15 @@ export default function SusuDetail() {
                         <span className="text-sm" title="This cycle's recipient">🏆</span>
                       )}
                       <div>
-                        <div className="text-sm text-white font-medium">{m.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm text-white font-medium">{m.name}</span>
+                          {/* Feature 1: slots badge */}
+                          {m.slots > 1 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-900/40 text-brand-300 border border-brand-800/40">
+                              {m.slots} hands
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-500">{m.phone}</div>
                       </div>
                       {m.payout_position && (
@@ -603,8 +720,8 @@ export default function SusuDetail() {
                       )}
                     </div>
                     <div className="text-right">
-                      <div className={`text-xs font-medium ${isPaid ? 'text-emerald-400' : 'text-gray-500'}`}>
-                        {isPaid ? '✓ Paid this cycle' : '○ Pending'}
+                      <div className={`text-xs font-medium ${isPaid ? 'text-emerald-400' : isMissed ? 'text-red-400' : 'text-gray-500'}`}>
+                        {isPaid ? '✓ Paid this cycle' : isMissed ? '✗ Missed' : `○ Pending ${fmt(memberContrib)}`}
                       </div>
                       <div className="text-xs text-gray-600">
                         Total: {fmt(parseFloat(m.total_contributed))}
@@ -614,6 +731,53 @@ export default function SusuDetail() {
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {/* Feature 8: Group Rules */}
+        {(group.rules || group.status !== 'completed') && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-white text-sm">Group Rules</h2>
+              {!editingRules && (
+                <button
+                  onClick={() => { setRulesText(group.rules ?? ''); setEditingRules(true) }}
+                  className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                >
+                  {group.rules ? 'Edit' : '+ Add rules'}
+                </button>
+              )}
+            </div>
+            {editingRules ? (
+              <div className="space-y-2">
+                <textarea
+                  value={rulesText}
+                  onChange={e => setRulesText(e.target.value)}
+                  rows={4}
+                  placeholder="Enter group rules..."
+                  className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => saveRules.mutate(rulesText)}
+                    disabled={saveRules.isPending}
+                    className="px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                  >
+                    {saveRules.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditingRules(false)}
+                    className="px-3 py-1.5 bg-gray-800 text-gray-400 text-xs rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : group.rules ? (
+              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
+            ) : (
+              <p className="text-xs text-gray-600 italic">No rules set yet.</p>
+            )}
           </div>
         )}
 

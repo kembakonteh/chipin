@@ -55,6 +55,7 @@ function PayModal({
         <h2 className="text-lg font-bold text-white mb-1">Pay Contribution</h2>
         <p className="text-sm text-gray-500 mb-5">
           {member.name} · {fmt(parseFloat(amount))}
+          {member.slots > 1 && <span className="ml-1 text-xs text-brand-400">({member.slots} hands)</span>}
         </p>
 
         {error && (
@@ -203,6 +204,8 @@ export default function PublicSusu() {
                 const isPaid = contrib?.paid ?? false
                 const isRecipient = cycle.recipient_member_id === m.id
                 const isActive = group.status === 'active' && !isPaid
+                // Feature 1: use slots to compute per-member contribution
+                const memberAmount = parseFloat(contrib?.amount ?? '0') || (m.slots * parseFloat(group.contribution_amount))
 
                 return (
                   <div key={m.id} className={`flex items-center justify-between px-5 py-3.5 ${
@@ -215,14 +218,22 @@ export default function PublicSusu() {
                         {isPaid ? '✓' : '○'}
                       </span>
                       <div>
-                        <span className={`text-sm font-medium ${isPaid ? 'text-white' : 'text-gray-400'}`}>
-                          {m.name}
-                        </span>
-                        {isRecipient && (
-                          <span className="ml-2 text-xs text-brand-400">🏆 Recipient</span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-sm font-medium ${isPaid ? 'text-white' : 'text-gray-400'}`}>
+                            {m.name}
+                          </span>
+                          {/* Feature 1: slots badge */}
+                          {m.slots > 1 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-900/40 text-brand-300 border border-brand-800/40">
+                              {m.slots} hands
+                            </span>
+                          )}
+                          {isRecipient && (
+                            <span className="text-xs text-brand-400">🏆 Recipient</span>
+                          )}
+                        </div>
                         {isPaid && contrib?.paid_via && (
-                          <span className="ml-2 text-xs text-gray-600 capitalize">via {contrib.paid_via}</span>
+                          <span className="text-xs text-gray-600 capitalize">via {contrib.paid_via}</span>
                         )}
                       </div>
                     </div>
@@ -231,7 +242,7 @@ export default function PublicSusu() {
                         onClick={() => setPayingMember(m)}
                         className="text-xs px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-500 transition-colors"
                       >
-                        Pay {fmt(parseFloat(group.contribution_amount))}
+                        Pay {fmt(memberAmount)}
                       </button>
                     )}
                     {isPaid && (
@@ -277,6 +288,43 @@ export default function PublicSusu() {
             </div>
           </div>
         )}
+
+        {/* Feature 8: Group Rules */}
+        {group.rules && (
+          <details className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
+            <summary className="px-5 py-3.5 font-semibold text-white text-sm cursor-pointer select-none">
+              Group Rules
+            </summary>
+            <div className="px-5 pb-4">
+              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
+            </div>
+          </details>
+        )}
+
+        {/* Feature 5: Share button */}
+        <div className="rounded-xl border border-gray-700 bg-gray-900 p-5 text-center space-y-3">
+          <p className="text-sm text-gray-400">Know someone who should join?</p>
+          <div className="flex gap-3 justify-center">
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Join our Susu group '${group.name}' on ChipIn! Pay your contribution online here: ${window.location.origin}/s/${slug}`)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm px-4 py-2 rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors"
+            >
+              Share via WhatsApp
+            </a>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/s/${slug}`)
+                  .then(() => alert('Link copied!'))
+                  .catch(() => {})
+              }}
+              className="text-sm px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+            >
+              Copy link
+            </button>
+          </div>
+        </div>
 
         <p className="text-center text-xs text-gray-600 pb-4">
           Powered by KafoTech ChipIn

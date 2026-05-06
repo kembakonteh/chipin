@@ -17,11 +17,21 @@ class SusuGroupCreate(BaseModel):
     payout_order: SusuPayoutOrder = SusuPayoutOrder.fixed
     start_date: date
     org_id: Optional[uuid.UUID] = None
+    # Feature 4: missed payment policy
+    missed_policy: str = "none"
+    late_fee_pct: Optional[Decimal] = None
+    # Feature 8: group rules
+    rules: Optional[str] = None
 
 
 class SusuGroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=255)
     payout_order: Optional[SusuPayoutOrder] = None
+    # Feature 4: missed payment policy
+    missed_policy: Optional[str] = None
+    late_fee_pct: Optional[Decimal] = None
+    # Feature 8: group rules
+    rules: Optional[str] = None
 
 
 class SusuMemberCreate(BaseModel):
@@ -29,6 +39,8 @@ class SusuMemberCreate(BaseModel):
     phone: str = Field(..., min_length=7, max_length=50)
     email: Optional[str] = Field(None, max_length=255)
     payout_position: Optional[int] = Field(None, ge=1)
+    # Feature 1: multiple slots/hands
+    slots: int = Field(1, ge=1, le=10)
 
 
 class SusuMemberUpdate(BaseModel):
@@ -36,6 +48,8 @@ class SusuMemberUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     phone: Optional[str] = Field(None, min_length=7, max_length=50)
     email: Optional[str] = None
+    # Feature 1: multiple slots/hands
+    slots: Optional[int] = Field(None, ge=1, le=10)
 
 
 class SusuMemberResponse(BaseModel):
@@ -51,6 +65,8 @@ class SusuMemberResponse(BaseModel):
     has_received_payout: bool
     total_contributed: Decimal
     joined_at: datetime
+    # Feature 1: multiple slots/hands
+    slots: int = 1
 
 
 class SusuContributionResponse(BaseModel):
@@ -64,6 +80,8 @@ class SusuContributionResponse(BaseModel):
     paid: bool
     paid_via: Optional[SusuPaidVia]
     paid_at: Optional[datetime]
+    # Feature 4: missed flag
+    missed: bool = False
 
 
 class SusuCycleResponse(BaseModel):
@@ -115,6 +133,11 @@ class SusuGroupResponse(BaseModel):
     next_contribution_date: Optional[date]
     next_payout_date: Optional[date]
     created_at: datetime
+    # Feature 4: missed payment policy
+    missed_policy: str = "none"
+    late_fee_pct: Optional[Decimal] = None
+    # Feature 8: group rules
+    rules: Optional[str] = None
 
 
 class SusuDetailResponse(SusuGroupResponse):

@@ -25,9 +25,10 @@ interface MemberRow {
   phone: string
   email: string
   payout_position: string
+  slots: string
 }
 
-const emptyMember = (): MemberRow => ({ name: '', phone: '', email: '', payout_position: '' })
+const emptyMember = (): MemberRow => ({ name: '', phone: '', email: '', payout_position: '', slots: '1' })
 
 export default function SusuCreatePage() {
   const navigate = useNavigate()
@@ -45,6 +46,11 @@ export default function SusuCreatePage() {
     d.setDate(d.getDate() + 7)
     return d.toISOString().split('T')[0]
   })
+  // Feature 4: missed payment policy
+  const [missedPolicy, setMissedPolicy] = useState('none')
+  const [lateFee, setLateFee] = useState('')
+  // Feature 8: group rules
+  const [rules, setRules] = useState('')
 
   // Members — collected on step 1 alongside group details
   const [members, setMembers] = useState<MemberRow[]>([emptyMember(), emptyMember()])
@@ -65,6 +71,9 @@ export default function SusuCreatePage() {
         name, contribution_amount: parseFloat(amount), frequency,
         total_cycles: parseInt(totalCycles), payout_order: payoutOrder,
         start_date: startDate,
+        missed_policy: missedPolicy,
+        late_fee_pct: lateFee ? parseFloat(lateFee) : null,
+        rules: rules.trim() || null,
       }).then(getData)
       setGroup(g)
 
@@ -75,6 +84,7 @@ export default function SusuCreatePage() {
           phone: m.phone.trim(),
           email: m.email.trim() || undefined,
           payout_position: m.payout_position ? parseInt(m.payout_position) : undefined,
+          slots: m.slots ? parseInt(m.slots) : 1,  // Feature 1: slots
         }).then(getData)
         added.push(member)
       }
@@ -102,7 +112,10 @@ export default function SusuCreatePage() {
     setMembers(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
   }
 
-  const validMemberCount = members.filter(m => m.name.trim() && m.phone.trim()).length
+  const validMembers = members.filter(m => m.name.trim() && m.phone.trim())
+  const validMemberCount = validMembers.length
+  const totalSlots = validMembers.reduce((sum, m) => sum + (parseInt(m.slots) || 1), 0)
+  const potPerCycle = totalSlots * (parseFloat(amount) || 0)
 
   return (
     <Layout>
@@ -222,6 +235,58 @@ export default function SusuCreatePage() {
                   className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white focus:border-brand-500 focus:outline-none"
                 />
               </div>
+
+              {/* Feature 4: Missed payment policy */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">Missed Payment Policy</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'none', label: 'None', desc: 'No action taken' },
+                    { value: 'flag', label: 'Flag only', desc: 'Mark as missed' },
+                    { value: 'late_fee', label: 'Charge late fee', desc: 'Add % to next pot' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMissedPolicy(opt.value)}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        missedPolicy === opt.value
+                          ? 'border-brand-500 bg-brand-900/30 text-brand-300'
+                          : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{opt.label}</div>
+                      <div className="text-xs text-gray-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                {missedPolicy === 'late_fee' && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={lateFee}
+                      onChange={e => setLateFee(e.target.value)}
+                      placeholder="e.g. 10"
+                      min={0}
+                      max={100}
+                      className="w-24 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    />
+                    <span className="text-sm text-gray-400">% late fee</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Feature 8: Group Rules */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Group Rules (optional)</label>
+                <textarea
+                  value={rules}
+                  onChange={e => setRules(e.target.value)}
+                  placeholder="e.g. Contributions must be paid by the due date. Late fees apply after 5 days..."
+                  rows={3}
+                  className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
+                />
+              </div>
             </div>
 
             {/* Members section — part of the same form */}
@@ -241,14 +306,25 @@ export default function SusuCreatePage() {
                       value={m.name}
                       onChange={e => updateMember(i, 'name', e.target.value)}
                       placeholder="Name"
-                      className="col-span-4 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                      className="col-span-3 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
                     />
                     <input
                       value={m.phone}
                       onChange={e => updateMember(i, 'phone', e.target.value)}
                       placeholder="Phone"
-                      className="col-span-4 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                      className="col-span-3 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
                     />
+                    <div className="col-span-2 flex flex-col">
+                      <span className="text-[10px] text-gray-500 mb-0.5 text-center">Hands</span>
+                      <input
+                        type="number"
+                        value={m.slots}
+                        onChange={e => updateMember(i, 'slots', e.target.value)}
+                        min={1}
+                        max={10}
+                        className="rounded-lg bg-gray-800 border border-gray-700 px-2 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none text-center"
+                      />
+                    </div>
                     {payoutOrder === 'fixed' ? (
                       <>
                         <input
@@ -291,9 +367,9 @@ export default function SusuCreatePage() {
               {validMemberCount > 0 && amount && (
                 <div className="rounded-lg bg-brand-900/20 border border-brand-800/30 px-4 py-3 text-sm text-brand-300">
                   Pot per cycle: <span className="font-bold">
-                    ${(parseFloat(amount || '0') * validMemberCount).toLocaleString()}
+                    ${potPerCycle.toLocaleString()}
                   </span>
-                  {' '}(${amount} × {validMemberCount} members)
+                  {' '}(${amount} × {totalSlots} slot{totalSlots !== 1 ? 's' : ''} across {validMemberCount} members)
                 </div>
               )}
 
@@ -358,7 +434,7 @@ export default function SusuCreatePage() {
             <div>
               <p className="text-xs font-medium text-gray-400 mb-2">Members ({addedMembers.length})</p>
               <div className="space-y-1">
-                {addedMembers.map((m, i) => (
+                {addedMembers.map((m) => (
                   <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-800 px-3 py-2 text-sm">
                     <span className="text-white">{m.name}</span>
                     <span className="text-gray-500 text-xs">{m.phone}</span>

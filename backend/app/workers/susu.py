@@ -83,7 +83,7 @@ async def process_susu_cycles(ctx: dict) -> None:
                             db.add(SusuContribution(
                                 cycle_id=next_cycle.id,
                                 member_id=member.id,
-                                amount=group.contribution_amount,
+                                amount=member.slots * group.contribution_amount,  # Feature 1: slots
                             ))
 
         await db.commit()
