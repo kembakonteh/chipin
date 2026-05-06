@@ -325,12 +325,14 @@ function MembersTab({ orgSlug }: { orgSlug: string }) {
 
 function SettingsTab({ org }: { org: Org }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const logoRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(org.name)
   const [description, setDescription] = useState(org.description ?? '')
   const [orgType, setOrgType] = useState<OrgType>(org.org_type ?? 'community')
   const [whatsapp, setWhatsapp] = useState(org.whatsapp_group_name ?? '')
   const [saved, setSaved] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const updateOrg = useMutation({
     mutationFn: (data: object) =>
@@ -351,6 +353,14 @@ function SettingsTab({ org }: { org: Org }) {
       }).then(getData)
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['org', org.slug] }),
+  })
+
+  const deleteOrg = useMutation({
+    mutationFn: () => api.delete(`/orgs/${org.slug}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgs'] })
+      navigate('/orgs')
+    },
   })
 
   return (
@@ -437,6 +447,43 @@ function SettingsTab({ org }: { org: Org }) {
         <p className="text-sm text-gray-400">
           Public page: <Link to={`/o/${org.slug}`} className="text-emerald-600 hover:underline" target="_blank">/o/{org.slug}</Link>
         </p>
+      </div>
+
+      {/* Danger zone */}
+      <div className="border-t border-red-100 pt-6">
+        <p className="text-sm font-semibold text-red-600 mb-1">Danger Zone</p>
+        <p className="text-xs text-gray-500 mb-3">
+          Deleting this organisation removes all its members. Any campaigns linked to it will become standalone campaigns and will not be deleted.
+        </p>
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="px-4 py-2 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Delete Organization
+          </button>
+        ) : (
+          <div className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-3">
+            <p className="text-sm font-medium text-red-700">
+              Are you sure? This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => deleteOrg.mutate()}
+                disabled={deleteOrg.isPending}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteOrg.isPending ? 'Deleting…' : 'Yes, delete it'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

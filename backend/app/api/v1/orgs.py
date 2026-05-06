@@ -230,6 +230,24 @@ async def update_org(
     return _org_response(org, count_result.scalar_one())
 
 
+@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_org(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    org = await _get_org_or_404(slug, db)
+    if org.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the org owner can delete it")
+
+    # Unlink any campaigns so they become standalone rather than vanishing
+    await db.execute(
+        sa.update(Campaign).where(Campaign.org_id == org.id).values(org_id=None)
+    )
+    await db.delete(org)
+    await db.commit()
+
+
 @router.post("/{slug}/logo", response_model=OrgResponse)
 async def upload_org_logo(
     slug: str,
