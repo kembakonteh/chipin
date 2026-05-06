@@ -16,6 +16,8 @@ class ContributorCreate(BaseModel):
     amount: Optional[Decimal] = None  # defaults to campaign.amount_per_person
     is_anonymous: bool = False
     org_member_id: Optional[uuid.UUID] = None  # add directly from org directory
+    paid_via: Optional[PaidVia] = None  # if provided, mark as paid immediately
+    note: Optional[str] = None  # reference/confirmation number
 
 
 class ContributorUpdate(BaseModel):

@@ -93,6 +93,7 @@ async def add_contributor(
             )
 
     amount = body.amount if body.amount is not None else (campaign.amount_per_person or 0)
+    now = datetime.now(timezone.utc) if body.paid_via else None
     contributor = Contributor(
         campaign_id=campaign.id,
         name=name,
@@ -101,6 +102,10 @@ async def add_contributor(
         amount=amount,
         is_anonymous=body.is_anonymous,
         added_by_organizer=True,
+        paid=body.paid_via is not None,
+        paid_via=body.paid_via,
+        paid_at=now,
+        payment_note=body.note,
     )
     db.add(contributor)
     await db.commit()

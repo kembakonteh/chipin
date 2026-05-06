@@ -11,14 +11,25 @@ interface Props {
   contributors: Contributor[]
 }
 
+type PaidVia = 'zelle' | 'cashapp' | 'cash' | 'card' | 'manual'
+
 interface AddForm {
   name: string
   email: string
   amount: string
   is_anonymous: boolean
+  paid_via: PaidVia | null
+  note: string
 }
 
-const EMPTY_FORM: AddForm = { name: '', email: '', amount: '', is_anonymous: false }
+const EMPTY_FORM: AddForm = { name: '', email: '', amount: '', is_anonymous: false, paid_via: null, note: '' }
+
+const PAY_METHODS: { value: PaidVia; label: string; icon: string }[] = [
+  { value: 'zelle',   label: 'Zelle',    icon: '💜' },
+  { value: 'cashapp', label: 'CashApp',  icon: '💚' },
+  { value: 'cash',    label: 'Cash',     icon: '💵' },
+  { value: 'manual',  label: 'Other',    icon: '✏️' },
+]
 
 export default function ContributorsTab({ campaign, contributors }: Props) {
   const [payTarget, setPayTarget] = useState<Contributor | null>(null)
@@ -36,10 +47,12 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
         email: form.email.trim() || null,
         amount: form.amount ? parseFloat(form.amount) : null,
         is_anonymous: form.is_anonymous,
+        paid_via: form.paid_via || null,
+        note: form.note.trim() || null,
       }).then(r => r.data),
-    onSuccess: () => {
+    onSuccess: (added) => {
       qc.invalidateQueries({ queryKey: ['contributors', campaign.slug] })
-      toast.success('Contributor added')
+      toast.success(added.paid ? `${added.name} added and marked paid` : 'Contributor added')
       setForm(EMPTY_FORM)
       setShowAdd(false)
     },
@@ -108,9 +121,11 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
       {showAdd && (
         <form
           onSubmit={handleAddSubmit}
-          className="rounded-xl border border-brand-700/40 bg-brand-900/20 p-4 space-y-3"
+          className="rounded-xl border border-brand-700/40 bg-brand-900/20 p-4 space-y-4"
         >
           <p className="text-sm font-medium text-brand-200">Add contributor</p>
+
+          {/* Name + email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               value={form.name}
@@ -128,6 +143,8 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
                 placeholder-gray-600 focus:border-brand-500 focus:outline-none"
             />
           </div>
+
+          {/* Amount + anonymous */}
           <div className="flex gap-3 items-center flex-wrap">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
@@ -152,15 +169,60 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
               />
               <span className="text-sm text-gray-300">Anonymous 🔒</span>
             </label>
-            <button
-              type="submit"
-              disabled={addMutation.isPending}
-              className="ml-auto rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white
-                hover:bg-brand-500 disabled:opacity-60 transition-colors"
-            >
-              {addMutation.isPending ? 'Adding…' : 'Add'}
-            </button>
           </div>
+
+          {/* Payment method */}
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400">Already paid? Select method:</p>
+            <div className="flex flex-wrap gap-2">
+              {PAY_METHODS.map(m => (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, paid_via: p.paid_via === m.value ? null : m.value }))}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium
+                    transition-colors ${
+                      form.paid_via === m.value
+                        ? 'border-brand-500 bg-brand-600/30 text-brand-200'
+                        : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                    }`}
+                >
+                  <span>{m.icon}</span>{m.label}
+                </button>
+              ))}
+              {form.paid_via && (
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, paid_via: null, note: '' }))}
+                  className="text-xs text-gray-500 hover:text-gray-300 px-1 transition-colors"
+                >
+                  ✕ clear
+                </button>
+              )}
+            </div>
+            {form.paid_via && (
+              <input
+                value={form.note}
+                onChange={(e) => setForm(p => ({ ...p, note: e.target.value }))}
+                placeholder="Reference / confirmation number (optional)"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white
+                  placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={addMutation.isPending}
+            className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white
+              hover:bg-brand-500 disabled:opacity-60 transition-colors"
+          >
+            {addMutation.isPending
+              ? 'Adding…'
+              : form.paid_via
+                ? `Add & mark paid via ${PAY_METHODS.find(m => m.value === form.paid_via)?.label}`
+                : 'Add (unpaid)'}
+          </button>
         </form>
       )}
 
