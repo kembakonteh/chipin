@@ -113,6 +113,7 @@ def _org_response(org: Org, member_count: int = 0) -> OrgResponse:
         logo_url=org.logo_url,
         org_type=org.org_type,
         owner_id=org.owner_id,
+        phone=org.phone,
         whatsapp_group_name=org.whatsapp_group_name,
         created_at=org.created_at,
         member_count=member_count,
