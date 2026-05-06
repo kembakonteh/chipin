@@ -14,6 +14,7 @@ interface Form {
   campaign_type: CampaignType
   has_goal: boolean
   goal_amount: string
+  contribution_note: string
   amount_per_person: string
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
@@ -35,6 +36,7 @@ const INIT_FORM: Form = {
   campaign_type: 'general',
   has_goal: true,
   goal_amount: '',
+  contribution_note: '',
   amount_per_person: '',
   visibility_mode: 'full_name',
   allow_anonymous_contributions: true,
@@ -117,6 +119,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
         description: form.description || null,
         campaign_type: form.campaign_type,
         goal_amount: form.has_goal && form.goal_amount ? parseFloat(form.goal_amount) : null,
+        contribution_note: !form.has_goal && form.contribution_note ? form.contribution_note.trim() : null,
         amount_per_person: form.amount_per_person ? parseFloat(form.amount_per_person) : null,
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
@@ -359,20 +362,39 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               )}
 
               {!form.has_goal && (
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Per Person (optional)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                    <input
-                      type="number"
-                      value={form.amount_per_person}
-                      onChange={e => setF('amount_per_person', e.target.value)}
-                      placeholder="25"
-                      min="0"
-                      step="0.01"
-                      className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
-                        text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Message to contributors <span className="text-gray-600">(optional)</span>
+                    </label>
+                    <textarea
+                      value={form.contribution_note}
+                      onChange={e => setF('contribution_note', e.target.value)}
+                      maxLength={200}
+                      rows={2}
+                      placeholder="e.g. Any amount donated will be appreciated — every bit helps!"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                        text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
                     />
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Shown on the public page where the goal amount would normally appear.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Per Person (optional)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={form.amount_per_person}
+                        onChange={e => setF('amount_per_person', e.target.value)}
+                        placeholder="25"
+                        min="0"
+                        step="0.01"
+                        className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
+                          text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

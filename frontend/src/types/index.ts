@@ -92,6 +92,7 @@ export interface Campaign {
   emoji: string
   campaign_type: CampaignType
   goal_amount: string | null
+  contribution_note: string | null
   amount_per_person: string | null
   currency: string
   collection_currency: CollectionCurrency

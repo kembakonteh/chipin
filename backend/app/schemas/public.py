@@ -13,6 +13,7 @@ class PublicContributorItem(BaseModel):
     amount: Decimal
     paid: bool
     paid_at: Optional[datetime]
+    message: Optional[str] = None
 
 
 class CampaignStatsResponse(BaseModel):
@@ -29,7 +30,8 @@ class PublicCampaignResponse(BaseModel):
     description: Optional[str]
     emoji: str
     campaign_type: CampaignType
-    goal_amount: Decimal
+    goal_amount: Optional[Decimal]
+    contribution_note: Optional[str] = None
     amount_per_person: Optional[Decimal]
     currency: str
     collection_currency: str

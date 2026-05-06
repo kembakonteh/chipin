@@ -31,6 +31,7 @@ class CampaignCreate(BaseModel):
     emoji: str = "⚽"
     campaign_type: CampaignType = CampaignType.general
     goal_amount: Optional[Decimal] = None
+    contribution_note: Optional[str] = None
     amount_per_person: Optional[Decimal] = None
     currency: str = "USD"
     collection_currency: CollectionCurrency = CollectionCurrency.USD
@@ -53,6 +54,7 @@ class CampaignUpdate(BaseModel):
     emoji: Optional[str] = None
     campaign_type: Optional[CampaignType] = None
     goal_amount: Optional[Decimal] = None
+    contribution_note: Optional[str] = None
     amount_per_person: Optional[Decimal] = None
     visibility_mode: Optional[VisibilityMode] = None
     allow_anonymous_contributions: Optional[bool] = None
@@ -73,6 +75,7 @@ class CampaignResponse(BaseModel):
     emoji: str
     campaign_type: CampaignType
     goal_amount: Optional[Decimal]
+    contribution_note: Optional[str]
     amount_per_person: Optional[Decimal]
     currency: str
     collection_currency: CollectionCurrency

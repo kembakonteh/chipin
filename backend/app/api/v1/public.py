@@ -151,6 +151,7 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         emoji=campaign.emoji,
         campaign_type=campaign.campaign_type,
         goal_amount=campaign.goal_amount,
+        contribution_note=campaign.contribution_note,
         amount_per_person=campaign.amount_per_person,
         currency=campaign.currency,
         collection_currency=collection_cur,

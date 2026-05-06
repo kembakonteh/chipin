@@ -33,6 +33,7 @@ interface PublicCampaign {
   emoji: string
   campaign_type: CampaignType
   goal_amount: string | null
+  contribution_note: string | null
   amount_per_person: string | null
   currency: string
   allow_anonymous_contributions: boolean
@@ -354,6 +355,11 @@ export default function PublicCampaign() {
               <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
             )}
           </p>
+          {goalAmount == null && campaign.contribution_note && (
+            <p className="text-brand-200 text-xs mt-1.5 italic max-w-xs mx-auto text-center leading-relaxed">
+              {campaign.contribution_note}
+            </p>
+          )}
           {/* Local-currency conversion line (e.g. ~GMD 42,000) */}
           {(campaign as any).payout_currency && (campaign as any).goal_amount_local && (
             <p className="text-brand-200 text-xs mt-0.5">
