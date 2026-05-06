@@ -510,23 +510,36 @@ function RecurringSection({ campaign }: { campaign: Campaign }) {
     }
   }, [schedule?.id])
 
+  const schedulePayload = () => ({
+    frequency: freq,
+    day_of_month: ['monthly', 'quarterly', 'annual'].includes(freq) ? parseInt(dom) : null,
+    day_of_week: ['weekly', 'biweekly'].includes(freq) ? parseInt(dow) : null,
+    start_date: startDate,
+    end_date: endDate || null,
+    auto_create_days_before: createDays,
+    auto_remind_days_before: remindDays,
+  })
+
   const createSchedule = useMutation({
     mutationFn: () =>
-      api.post<RecurringSchedule>(`/campaigns/${campaign.slug}/schedule`, {
-        frequency: freq,
-        day_of_month: ['monthly', 'quarterly', 'annual'].includes(freq) ? parseInt(dom) : null,
-        day_of_week: ['weekly', 'biweekly'].includes(freq) ? parseInt(dow) : null,
-        start_date: startDate,
-        end_date: endDate || null,
-        auto_create_days_before: createDays,
-        auto_remind_days_before: remindDays,
-      }).then(r => r.data),
+      api.post<RecurringSchedule>(`/campaigns/${campaign.slug}/schedule`, schedulePayload()).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule', campaign.slug] })
       qc.invalidateQueries({ queryKey: ['recurring'] })
       toast.success('Recurring schedule saved')
     },
     onError: () => toast.error('Failed to save schedule'),
+  })
+
+  const updateSchedule = useMutation({
+    mutationFn: () =>
+      api.patch<RecurringSchedule>(`/campaigns/${campaign.slug}/schedule`, schedulePayload()).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['schedule', campaign.slug] })
+      qc.invalidateQueries({ queryKey: ['recurring'] })
+      toast.success('Recurring schedule updated')
+    },
+    onError: () => toast.error('Failed to update schedule'),
   })
 
   const toggleActive = useMutation({
@@ -664,12 +677,12 @@ function RecurringSection({ campaign }: { campaign: Campaign }) {
 
           <button
             type="button"
-            onClick={() => createSchedule.mutate()}
-            disabled={createSchedule.isPending || !startDate}
+            onClick={() => schedule ? updateSchedule.mutate() : createSchedule.mutate()}
+            disabled={(schedule ? updateSchedule.isPending : createSchedule.isPending) || !startDate}
             className="w-full rounded-lg bg-brand-600/20 border border-brand-700 py-2 text-sm font-medium
               text-brand-300 hover:bg-brand-600/40 disabled:opacity-50 transition-colors"
           >
-            {createSchedule.isPending
+            {(schedule ? updateSchedule.isPending : createSchedule.isPending)
               ? 'Saving…'
               : schedule
                 ? 'Update Schedule'

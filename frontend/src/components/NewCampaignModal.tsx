@@ -89,7 +89,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
       description: t.description_template,
       campaign_type: t.campaign_type,
       goal_amount: '',
-      amount_per_person: t.default_amount_per_person ?? '',
+      amount_per_person: t.default_amount_per_person != null ? String(t.default_amount_per_person) : '',
       visibility_mode: t.default_visibility_mode,
       allow_anonymous_contributions: t.default_anonymous,
       template_id: t.id,

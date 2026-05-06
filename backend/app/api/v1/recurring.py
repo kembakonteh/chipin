@@ -125,10 +125,12 @@ async def update_schedule(
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(schedule, field, value)
 
-    # Recalculate next_run_at if auto_create_days_before changed
-    if body.auto_create_days_before is not None:
-        current_due = schedule.next_run_at.date() + timedelta(days=schedule.auto_create_days_before)
-        schedule.next_run_at = schedule_next_run_at(current_due, schedule.auto_create_days_before)
+    # Recalculate next_run_at if anything affecting the due-date calculation changed
+    if any(f in body.model_fields_set for f in ('frequency', 'day_of_month', 'day_of_week', 'start_date', 'auto_create_days_before')):
+        next_due = compute_initial_due_date(
+            schedule.frequency, schedule.start_date, schedule.day_of_month, schedule.day_of_week
+        )
+        schedule.next_run_at = schedule_next_run_at(next_due, schedule.auto_create_days_before)
 
     await db.commit()
     await db.refresh(schedule)

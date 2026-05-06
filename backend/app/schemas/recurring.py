@@ -46,6 +46,10 @@ class RecurringScheduleCreate(BaseModel):
 
 
 class RecurringScheduleUpdate(BaseModel):
+    frequency: Optional[Frequency] = None
+    day_of_month: Optional[int] = None
+    day_of_week: Optional[int] = None
+    start_date: Optional[date] = None
     end_date: Optional[date] = None
     auto_create_days_before: Optional[int] = None
     auto_remind_days_before: Optional[int] = None
