@@ -435,10 +435,25 @@ export default function PublicCampaign() {
         {/* Step 2a: Card payment form */}
         {isActive && payMode === 'card' && (
           <form onSubmit={handlePay} className="space-y-3">
-            <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200
-              px-3 py-2 mb-1">
-              <span className="text-amber-500 text-sm">⚠️</span>
-              <p className="text-xs text-amber-700 font-medium">Debit cards only — credit cards are not accepted.</p>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-500 text-sm">⚠️</span>
+                <p className="text-xs text-amber-700 font-medium">Debit cards only — credit cards are not accepted.</p>
+              </div>
+              <p className="text-xs text-amber-600 pl-6">
+                A <span className="font-semibold">2.5% platform fee</span> is added to card payments.
+                {(() => {
+                  const parsed = parseFloat(amount)
+                  if (!amount || isNaN(parsed) || parsed <= 0) return null
+                  const fee = parsed * 0.025
+                  const total = parsed + fee
+                  return (
+                    <span className="text-amber-700 font-medium">
+                      {' '}You'll be charged <span className="font-bold">${total.toFixed(2)}</span> (${parsed.toFixed(2)} + ${fee.toFixed(2)} fee).
+                    </span>
+                  )
+                })()}
+              </p>
             </div>
 
             <input
@@ -571,7 +586,7 @@ export default function PublicCampaign() {
           </div>
         )}
 
-        {payMode !== 'card' && (
+        {payMode === null && (
           <p className="mt-3 text-center text-xs text-gray-400">
             Card payments secured by Stripe · 2.5% platform fee applies
           </p>
