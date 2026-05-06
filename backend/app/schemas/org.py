@@ -12,6 +12,7 @@ class OrgCreate(BaseModel):
     name: str
     description: Optional[str] = None
     org_type: OrgType = OrgType.community
+    phone: Optional[str] = None
     whatsapp_group_name: Optional[str] = None
 
 
@@ -19,6 +20,7 @@ class OrgUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     org_type: Optional[OrgType] = None
+    phone: Optional[str] = None
     whatsapp_group_name: Optional[str] = None
 
 
@@ -64,6 +66,7 @@ class OrgResponse(BaseModel):
     logo_url: Optional[str]
     org_type: Optional[OrgType]
     owner_id: uuid.UUID
+    phone: Optional[str]
     whatsapp_group_name: Optional[str]
     created_at: datetime
     member_count: int = 0

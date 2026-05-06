@@ -330,6 +330,7 @@ function SettingsTab({ org }: { org: Org }) {
   const [name, setName] = useState(org.name)
   const [description, setDescription] = useState(org.description ?? '')
   const [orgType, setOrgType] = useState<OrgType>(org.org_type ?? 'community')
+  const [phone, setPhone] = useState(org.phone ?? '')
   const [whatsapp, setWhatsapp] = useState(org.whatsapp_group_name ?? '')
   const [saved, setSaved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -417,6 +418,16 @@ function SettingsTab({ org }: { org: Org }) {
       </div>
 
       <div>
+        <label className={labelCls}>Contact Phone</label>
+        <input
+          className={inputCls}
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="e.g. +1 202 555 0199"
+        />
+      </div>
+
+      <div>
         <label className={labelCls}>WhatsApp Group Name</label>
         <input
           className={inputCls}
@@ -433,6 +444,7 @@ function SettingsTab({ org }: { org: Org }) {
               name,
               description: description || null,
               org_type: orgType,
+              phone: phone || null,
               whatsapp_group_name: whatsapp || null,
             })
           }

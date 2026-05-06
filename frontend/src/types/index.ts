@@ -201,6 +201,7 @@ export interface Org {
   logo_url: string | null
   org_type: OrgType | null
   owner_id: string
+  phone: string | null
   whatsapp_group_name: string | null
   created_at: string
   member_count: number

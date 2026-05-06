@@ -41,6 +41,7 @@ class Org(Base, UUIDMixin, TimestampMixin):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     whatsapp_group_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     owner: Mapped["User"] = relationship("User")
