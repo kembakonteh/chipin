@@ -9,8 +9,8 @@ import { fmt } from '../types'
 
 function CampaignCard({ c }: { c: PublicOrgCampaign }) {
   const raised = parseFloat(c.total_raised)
-  const goal = parseFloat(c.goal_amount)
-  const pct = goal > 0 ? Math.min((raised / goal) * 100, 100) : 0
+  const goal = c.goal_amount != null ? parseFloat(c.goal_amount) : null
+  const pct = goal != null && goal > 0 ? Math.min((raised / goal) * 100, 100) : 0
 
   return (
     <Link
@@ -27,16 +27,23 @@ function CampaignCard({ c }: { c: PublicOrgCampaign }) {
           <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{c.status}</span>
         )}
       </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-emerald-500 rounded-full"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="flex justify-between text-xs text-gray-500 mt-1.5">
-        <span className="font-medium text-emerald-700">{fmt(raised)}</span>
-        <span>of {fmt(goal)}</span>
-      </div>
+      {goal != null && (
+        <>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-1.5">
+            <span className="font-medium text-emerald-700">{fmt(raised)}</span>
+            <span>of {fmt(goal)}</span>
+          </div>
+        </>
+      )}
+      {goal == null && (
+        <p className="text-xs text-emerald-700 font-medium mt-1">{fmt(raised)} raised</p>
+      )}
     </Link>
   )
 }

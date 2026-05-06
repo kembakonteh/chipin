@@ -12,6 +12,7 @@ interface Form {
   title: string
   description: string
   campaign_type: CampaignType
+  has_goal: boolean
   goal_amount: string
   amount_per_person: string
   visibility_mode: VisibilityMode
@@ -32,6 +33,7 @@ const INIT_FORM: Form = {
   title: '',
   description: '',
   campaign_type: 'general',
+  has_goal: true,
   goal_amount: '',
   amount_per_person: '',
   visibility_mode: 'full_name',
@@ -114,7 +116,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
         title: form.title,
         description: form.description || null,
         campaign_type: form.campaign_type,
-        goal_amount: parseFloat(form.goal_amount),
+        goal_amount: form.has_goal && form.goal_amount ? parseFloat(form.goal_amount) : null,
         amount_per_person: form.amount_per_person ? parseFloat(form.amount_per_person) : null,
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
@@ -162,8 +164,8 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   function handleDetailsSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.title.trim()) { toast.error('Title is required'); return }
-    if (!form.goal_amount || isNaN(parseFloat(form.goal_amount))) {
-      toast.error('Goal amount is required')
+    if (form.has_goal && (!form.goal_amount || isNaN(parseFloat(form.goal_amount)))) {
+      toast.error('Enter a goal amount, or uncheck "Set a goal"')
       return
     }
     createMutation.mutate()
@@ -294,40 +296,77 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               </div>
             )}
 
-            {/* Goal + Per person */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Goal Amount <span className="text-red-400">*</span></label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                  <input
-                    type="number"
-                    value={form.goal_amount}
-                    onChange={e => setF('goal_amount', e.target.value)}
-                    placeholder="500"
-                    min="1"
-                    step="0.01"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
-                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
-                  />
+            {/* Goal toggle + amounts */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.has_goal}
+                  onChange={e => setF('has_goal', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-500
+                    focus:ring-brand-500 focus:ring-offset-gray-900"
+                />
+                <div>
+                  <span className="text-sm text-gray-200">Set a goal amount</span>
+                  <span className="block text-xs text-gray-500">Uncheck to collect open-ended contributions</span>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Per Person</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                  <input
-                    type="number"
-                    value={form.amount_per_person}
-                    onChange={e => setF('amount_per_person', e.target.value)}
-                    placeholder="25"
-                    min="0"
-                    step="0.01"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
-                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
-                  />
+              </label>
+
+              {form.has_goal && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Goal Amount <span className="text-red-400">*</span></label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={form.goal_amount}
+                        onChange={e => setF('goal_amount', e.target.value)}
+                        placeholder="500"
+                        min="1"
+                        step="0.01"
+                        className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
+                          text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Per Person</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={form.amount_per_person}
+                        onChange={e => setF('amount_per_person', e.target.value)}
+                        placeholder="25"
+                        min="0"
+                        step="0.01"
+                        className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
+                          text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {!form.has_goal && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Per Person (optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                    <input
+                      type="number"
+                      value={form.amount_per_person}
+                      onChange={e => setF('amount_per_person', e.target.value)}
+                      placeholder="25"
+                      min="0"
+                      step="0.01"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2.5
+                        text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Visibility */}

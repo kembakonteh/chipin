@@ -96,17 +96,21 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
           <div>
             <p className="text-sm text-white font-medium">
               {fmt(stats.totalRaised, campaign.currency)}{' '}
-              <span className="text-gray-500 font-normal">
-                of {fmt(stats.goalAmount, campaign.currency)}
-              </span>
+              {stats.goalAmount != null && (
+                <span className="text-gray-500 font-normal">
+                  of {fmt(stats.goalAmount, campaign.currency)}
+                </span>
+              )}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
               {stats.paidCount} paid / {stats.totalCount} total
             </p>
           </div>
-          <span className="text-xs text-brand-400 font-medium">
-            {Math.round(stats.progress)}%
-          </span>
+          {stats.goalAmount != null && (
+            <span className="text-xs text-brand-400 font-medium">
+              {Math.round(stats.progress)}%
+            </span>
+          )}
         </div>
       ) : null}
     </div>

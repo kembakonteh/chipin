@@ -91,7 +91,7 @@ export interface Campaign {
   description: string | null
   emoji: string
   campaign_type: CampaignType
-  goal_amount: string
+  goal_amount: string | null
   amount_per_person: string | null
   currency: string
   collection_currency: CollectionCurrency
@@ -233,7 +233,7 @@ export interface PublicOrgCampaign {
   emoji: string
   status: string
   total_raised: string
-  goal_amount: string
+  goal_amount: string | null
   paid_count: number
 }
 
@@ -285,7 +285,7 @@ export interface RecurringScheduleWithCampaign extends RecurringSchedule {
 
 export interface CampaignStats {
   totalRaised: number
-  goalAmount: number
+  goalAmount: number | null
   progress: number
   paidCount: number
   totalCount: number
@@ -296,8 +296,8 @@ export interface CampaignStats {
 export function computeStats(campaign: Campaign, contributors: Contributor[]): CampaignStats {
   const paid = contributors.filter(c => c.paid)
   const totalRaised = paid.reduce((s, c) => s + parseFloat(c.amount), 0)
-  const goalAmount = parseFloat(campaign.goal_amount)
-  const progress = goalAmount > 0 ? Math.min((totalRaised / goalAmount) * 100, 100) : 0
+  const goalAmount = campaign.goal_amount != null ? parseFloat(campaign.goal_amount) : null
+  const progress = goalAmount != null && goalAmount > 0 ? Math.min((totalRaised / goalAmount) * 100, 100) : 0
   const feeRate = parseFloat(campaign.platform_fee_pct) / 100
   const platformFees = totalRaised * feeRate
   const net = totalRaised - platformFees

@@ -16,7 +16,7 @@ interface OrgCampaignItem {
   title: string
   emoji: string
   status: string
-  goal_amount: string
+  goal_amount: string | null
 }
 
 interface OrgCampaignsData {
@@ -75,7 +75,7 @@ function CampaignsTab({ orgSlug }: { orgSlug: string }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {campaigns.map((c: { slug: string; title: string; emoji: string; status: string; goal_amount: string }) => (
+          {campaigns.map((c: { slug: string; title: string; emoji: string; status: string; goal_amount: string | null }) => (
             <button
               key={c.slug}
               onClick={() => navigate(`/campaigns/${c.slug}`)}
@@ -84,7 +84,9 @@ function CampaignsTab({ orgSlug }: { orgSlug: string }) {
               <span className="text-2xl">{c.emoji}</span>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-gray-900 truncate">{c.title}</p>
-                <p className="text-xs text-gray-400 mt-0.5">Goal: {fmt(parseFloat(c.goal_amount))}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {c.goal_amount != null ? `Goal: ${fmt(parseFloat(c.goal_amount))}` : 'Open goal'}
+                </p>
               </div>
               <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                 c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'

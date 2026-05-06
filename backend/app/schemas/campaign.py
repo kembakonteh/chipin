@@ -30,7 +30,7 @@ class CampaignCreate(BaseModel):
     description: Optional[str] = None
     emoji: str = "⚽"
     campaign_type: CampaignType = CampaignType.general
-    goal_amount: Decimal
+    goal_amount: Optional[Decimal] = None
     amount_per_person: Optional[Decimal] = None
     currency: str = "USD"
     collection_currency: CollectionCurrency = CollectionCurrency.USD
@@ -72,7 +72,7 @@ class CampaignResponse(BaseModel):
     description: Optional[str]
     emoji: str
     campaign_type: CampaignType
-    goal_amount: Decimal
+    goal_amount: Optional[Decimal]
     amount_per_person: Optional[Decimal]
     currency: str
     collection_currency: CollectionCurrency

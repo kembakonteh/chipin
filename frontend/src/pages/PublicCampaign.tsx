@@ -31,7 +31,7 @@ interface PublicCampaign {
   description: string | null
   emoji: string
   campaign_type: CampaignType
-  goal_amount: string
+  goal_amount: string | null
   amount_per_person: string | null
   currency: string
   allow_anonymous_contributions: boolean
@@ -124,7 +124,7 @@ export default function PublicCampaign() {
   // Animated progress: start at 0 then transition to real value
   const realProgress = live
     ? live.progress_pct
-    : campaign
+    : campaign && campaign.goal_amount
       ? (parseFloat(campaign.total_raised) / parseFloat(campaign.goal_amount)) * 100
       : 0
   const [animProgress, setAnimProgress] = useState(0)
@@ -169,11 +169,11 @@ export default function PublicCampaign() {
 
   // Derived display values
   const totalRaised   = live ? parseFloat(live.total_raised) : parseFloat(campaign?.total_raised ?? '0')
-  const goalAmount    = parseFloat(campaign?.goal_amount ?? '0')
+  const goalAmount    = campaign?.goal_amount != null ? parseFloat(campaign.goal_amount) : null
   const paidCount     = live?.paid_count     ?? campaign?.paid_count ?? 0
   const totalCount    = live?.contributor_count ?? campaign?.contributor_count ?? 0
   const pendingCount  = Math.max(0, totalCount - paidCount)
-  const remaining     = Math.max(0, goalAmount - totalRaised)
+  const remaining     = goalAmount != null ? Math.max(0, goalAmount - totalRaised) : null
   const amountPer     = campaign?.amount_per_person ? parseFloat(campaign.amount_per_person) : null
 
   // Payment form
@@ -330,18 +330,23 @@ export default function PublicCampaign() {
 
         {/* Progress ring + raised */}
         <div className="flex flex-col items-center mb-6">
-          <ProgressRing
-            percent={animProgress}
-            size={160}
-            strokeWidth={14}
-            color="white"
-            trackColor="rgba(255,255,255,0.2)"
-          />
+          {goalAmount != null && (
+            <ProgressRing
+              percent={animProgress}
+              size={160}
+              strokeWidth={14}
+              color="white"
+              trackColor="rgba(255,255,255,0.2)"
+            />
+          )}
           <p className="mt-4 text-4xl font-bold tabular-nums">
             {fmt(totalRaised, campaign.currency)}
           </p>
           <p className="text-brand-100 text-sm mt-1">
-            of {fmt(goalAmount, campaign.currency)} goal
+            {goalAmount != null
+              ? <>of {fmt(goalAmount, campaign.currency)} goal</>
+              : <>raised so far</>
+            }
             {amountPer && (
               <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
             )}
@@ -363,7 +368,7 @@ export default function PublicCampaign() {
         <div className="flex justify-center gap-2 flex-wrap">
           <Pill label="Paid" value={String(paidCount)} />
           <Pill label="Pending" value={String(pendingCount)} />
-          <Pill label="Remaining" value={fmt(remaining, campaign.currency)} />
+          {remaining != null && <Pill label="Remaining" value={fmt(remaining, campaign.currency)} />}
         </div>
       </div>
 

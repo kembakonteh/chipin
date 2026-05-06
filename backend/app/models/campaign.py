@@ -72,7 +72,7 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     campaign_type: Mapped[CampaignType] = mapped_column(
         Enum(CampaignType, name="campaigntype"), nullable=False, default=CampaignType.general
     )
-    goal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    goal_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     amount_per_person: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     collection_currency: Mapped[CollectionCurrency] = mapped_column(

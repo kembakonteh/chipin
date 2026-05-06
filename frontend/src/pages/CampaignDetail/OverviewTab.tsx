@@ -20,11 +20,19 @@ export default function OverviewTab({ campaign, contributors }: Props) {
       {/* Progress + key stats */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
         <div className="flex flex-col sm:flex-row items-center gap-8">
-          <ProgressRing percent={stats.progress} size={160} strokeWidth={14} label="funded" />
+          {stats.goalAmount != null ? (
+            <ProgressRing percent={stats.progress} size={160} strokeWidth={14} label="funded" />
+          ) : (
+            <div className="flex flex-col items-center justify-center w-40 h-40 rounded-full
+              border-4 border-gray-800 shrink-0">
+              <span className="text-3xl">{campaign.emoji}</span>
+              <span className="text-xs text-gray-500 mt-1">open goal</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-x-10 gap-y-4 flex-1 w-full sm:w-auto">
             <Stat label="Total raised" value={fmt(stats.totalRaised, campaign.currency)} accent />
-            <Stat label="Goal" value={fmt(stats.goalAmount, campaign.currency)} />
+            <Stat label="Goal" value={stats.goalAmount != null ? fmt(stats.goalAmount, campaign.currency) : '—'} />
             <Stat label="Paid" value={String(stats.paidCount)} />
             <Stat label="Total contributors" value={String(stats.totalCount)} />
           </div>
