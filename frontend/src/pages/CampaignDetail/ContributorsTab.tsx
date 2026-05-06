@@ -35,7 +35,25 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
   const [payTarget, setPayTarget] = useState<Contributor | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState<AddForm>(EMPTY_FORM)
+  const [exporting, setExporting] = useState(false)
   const qc = useQueryClient()
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await api.get(`/campaigns/${campaign.slug}/contributors/export`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${campaign.slug}-contributors.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const paid = contributors.filter(c => c.paid)
   const unpaid = contributors.filter(c => !c.paid)
@@ -95,7 +113,7 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           <span className="text-white font-medium">{paid.length}</span> paid ·{' '}
           <span className="text-gray-500">{unpaid.length} unpaid</span>
         </p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {unpaid.length > 0 && (
             <button
               type="button"
@@ -106,6 +124,15 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
               📱 Remind all unpaid
             </button>
           )}
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting || contributors.length === 0}
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs
+              font-medium text-gray-300 hover:bg-gray-700 disabled:opacity-40 transition-colors"
+          >
+            {exporting ? 'Exporting…' : '⬇ Export CSV'}
+          </button>
           <button
             type="button"
             onClick={() => setShowAdd(v => !v)}

@@ -1,7 +1,10 @@
+import csv
+import io
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,6 +129,49 @@ async def list_contributors(
         .order_by(Contributor.created_at.asc())
     )
     return result.scalars().all()
+
+
+@router.get("/campaigns/{slug}/contributors/export")
+async def export_contributors_csv(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_scoped(slug, current_user.id, db)
+    result = await db.execute(
+        select(Contributor)
+        .where(Contributor.campaign_id == campaign.id)
+        .order_by(Contributor.paid.desc(), Contributor.created_at.asc())
+    )
+    contributors = result.scalars().all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Name", "Phone", "Email", "Amount", "Paid",
+        "Payment Method", "Date Paid", "Reference / Note", "Anonymous", "Added At",
+    ])
+    for c in contributors:
+        writer.writerow([
+            c.name,
+            c.phone or "",
+            c.email or "",
+            str(c.amount),
+            "Yes" if c.paid else "No",
+            c.paid_via.value if c.paid_via else "",
+            c.paid_at.strftime("%Y-%m-%d %H:%M") if c.paid_at else "",
+            c.payment_note or "",
+            "Yes" if c.is_anonymous else "No",
+            c.created_at.strftime("%Y-%m-%d"),
+        ])
+
+    filename = f"{slug}-contributors.csv"
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch(
