@@ -453,7 +453,7 @@ function SettingsTab({ org }: { org: Org }) {
       <div className="border-t border-red-100 pt-6">
         <p className="text-sm font-semibold text-red-600 mb-1">Danger Zone</p>
         <p className="text-xs text-gray-500 mb-3">
-          Deleting this organisation removes all its members. Any campaigns linked to it will become standalone campaigns and will not be deleted.
+          Deleting this organisation removes the member roster. Your campaigns and all payment history are <span className="font-medium text-gray-700">not affected</span> — they stay intact as standalone campaigns. If you create a new organisation afterwards, you will need to re-add or re-import the members.
         </p>
         {!confirmDelete ? (
           <button
