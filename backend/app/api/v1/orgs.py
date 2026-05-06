@@ -240,11 +240,12 @@ async def delete_org(
     if org.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the org owner can delete it")
 
-    # Unlink any campaigns so they become standalone rather than vanishing
+    # Unlink campaigns so they become standalone rather than vanishing
     await db.execute(
         sa.update(Campaign).where(Campaign.org_id == org.id).values(org_id=None)
     )
-    await db.delete(org)
+    # Use a raw DELETE so PostgreSQL's ON DELETE CASCADE removes org_members cleanly
+    await db.execute(sa.delete(Org).where(Org.id == org.id))
     await db.commit()
 
 
