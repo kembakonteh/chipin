@@ -141,17 +141,22 @@ export default function OrgsPage() {
       {isLoading ? (
         <div className="text-center py-16 text-gray-400">Loading…</div>
       ) : orgs.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <p className="text-4xl mb-3">🏛️</p>
-          <p className="font-semibold text-gray-700">No organizations yet</p>
-          <p className="text-sm text-gray-500 mt-1 mb-6">
-            Create one to manage members across campaigns
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-10 text-center">
+          <p className="text-4xl mb-4">🏛️</p>
+          <p className="text-lg font-semibold text-white mb-2">No organisations yet</p>
+          <p className="text-sm text-gray-400 max-w-md mx-auto mb-2 leading-relaxed">
+            Organisations are for groups you collect from repeatedly — the same members,
+            multiple campaigns, month after month or year after year.
+          </p>
+          <p className="text-sm text-gray-500 max-w-md mx-auto mb-8 leading-relaxed">
+            Add your members once and they are automatically imported into every new
+            campaign you create for that group. No re-entering names and numbers each time.
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700"
+            className="px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-500 transition-colors"
           >
-            Create Organization
+            Create Organisation
           </button>
         </div>
       ) : (
