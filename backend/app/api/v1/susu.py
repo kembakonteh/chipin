@@ -579,6 +579,140 @@ async def mark_payout_sent(
 
 
 # ---------------------------------------------------------------------------
+# POST /susu/{slug}/advance — move to the next cycle
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/advance", response_model=SusuDetailResponse)
+async def advance_cycle(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(SusuGroup)
+        .options(selectinload(SusuGroup.members))
+        .where(SusuGroup.slug == slug)
+    )
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+    if group.status != SusuStatus.active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group is not active")
+
+    # Verify current cycle is paid out
+    cycle_result = await db.execute(
+        select(SusuCycle).where(
+            SusuCycle.group_id == group.id,
+            SusuCycle.cycle_number == group.current_cycle,
+        )
+    )
+    current_cycle = cycle_result.scalar_one_or_none()
+    if not current_cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Current cycle not found")
+    if current_cycle.status != SusuCycleStatus.paid_out:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current cycle must be fully paid out before advancing",
+        )
+
+    next_cycle_number = group.current_cycle + 1
+
+    # All cycles done → complete the group
+    if next_cycle_number > group.total_cycles:
+        group.status = SusuStatus.completed
+        group.next_contribution_date = None
+        group.next_payout_date = None
+        await db.commit()
+        group = await _get_group_or_404(slug, db)
+        return _build_detail(group)
+
+    # Find the next cycle record
+    next_cycle_result = await db.execute(
+        select(SusuCycle).where(
+            SusuCycle.group_id == group.id,
+            SusuCycle.cycle_number == next_cycle_number,
+        )
+    )
+    next_cycle = next_cycle_result.scalar_one_or_none()
+    if not next_cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Next cycle record not found")
+
+    # Create contribution records for next cycle if they don't exist yet
+    existing_contribs = await db.execute(
+        select(SusuContribution).where(SusuContribution.cycle_id == next_cycle.id)
+    )
+    if not existing_contribs.scalars().first():
+        for member in group.members:
+            db.add(SusuContribution(
+                cycle_id=next_cycle.id,
+                member_id=member.id,
+                amount=group.contribution_amount,
+            ))
+
+    group.current_cycle = next_cycle_number
+    group.next_contribution_date = next_cycle.due_date
+    group.next_payout_date = next_cycle.due_date
+
+    await db.commit()
+    group = await _get_group_or_404(slug, db)
+    return _build_detail(group)
+
+
+# ---------------------------------------------------------------------------
+# GET /susu/{slug}/history — per-member contribution history across all cycles
+# ---------------------------------------------------------------------------
+
+@router.get("/susu/{slug}/history")
+async def susu_member_history(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group = await _get_group_or_404(slug, db)
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    # Build member map
+    members = sorted(group.members, key=lambda m: m.payout_position or 999)
+
+    # Build cycle × member payment matrix
+    # cycles are already loaded via selectinload
+    cycles_sorted = sorted(group.cycles, key=lambda c: c.cycle_number)
+
+    # contrib lookup: (cycle_id, member_id) → contribution
+    contrib_lookup: dict[tuple, SusuContribution] = {}
+    for cycle in cycles_sorted:
+        for c in cycle.contributions:
+            contrib_lookup[(cycle.id, c.member_id)] = c
+
+    rows = []
+    for m in members:
+        paid_cycles = []
+        for cycle in cycles_sorted:
+            contrib = contrib_lookup.get((cycle.id, m.id))
+            paid_cycles.append({
+                "cycle_number": cycle.cycle_number,
+                "paid": contrib.paid if contrib else False,
+                "paid_via": contrib.paid_via.value if contrib and contrib.paid_via else None,
+            })
+        rows.append({
+            "member_id": str(m.id),
+            "member_name": m.name,
+            "payout_position": m.payout_position,
+            "total_contributed": str(m.total_contributed),
+            "cycles": paid_cycles,
+        })
+
+    return {
+        "total_cycles": group.total_cycles,
+        "current_cycle": group.current_cycle,
+        "members": rows,
+    }
+
+
+# ---------------------------------------------------------------------------
 # POST /s/{slug}/pay — public Stripe checkout for susu contribution
 # ---------------------------------------------------------------------------
 

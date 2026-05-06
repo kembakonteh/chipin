@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
@@ -22,11 +23,13 @@ const CYCLE_STATUS_STYLES: Record<SusuCycleStatus, string> = {
 }
 
 const PAID_VIA_OPTIONS: { value: SusuPaidVia; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'zelle', label: 'Zelle' },
+  { value: 'cash',    label: 'Cash' },
+  { value: 'zelle',   label: 'Zelle' },
   { value: 'cashapp', label: 'CashApp' },
-  { value: 'card', label: 'Card' },
+  { value: 'card',    label: 'Card' },
 ]
+
+// ── Contribution row ──────────────────────────────────────────────────────────
 
 function ContributionRow({
   contribution,
@@ -95,6 +98,8 @@ function ContributionRow({
   )
 }
 
+// ── Cycle summary row ─────────────────────────────────────────────────────────
+
 function CycleSummaryRow({ cycle, isCurrent }: { cycle: SusuCycleSummary; isCurrent: boolean }) {
   const pct = parseFloat(cycle.pot_amount) > 0
     ? Math.min((parseFloat(cycle.collected_amount) / parseFloat(cycle.pot_amount)) * 100, 100)
@@ -125,18 +130,121 @@ function CycleSummaryRow({ cycle, isCurrent }: { cycle: SusuCycleSummary; isCurr
   )
 }
 
-// Import useState at the top
-import { useState } from 'react'
+// ── History tab ───────────────────────────────────────────────────────────────
+
+interface HistoryRow {
+  member_id: string
+  member_name: string
+  payout_position: number | null
+  total_contributed: string
+  cycles: { cycle_number: number; paid: boolean; paid_via: string | null }[]
+}
+
+interface HistoryData {
+  total_cycles: number
+  current_cycle: number
+  members: HistoryRow[]
+}
+
+function HistoryTab({ groupSlug }: { groupSlug: string }) {
+  const { data, isLoading } = useQuery<HistoryData>({
+    queryKey: ['susu-history', groupSlug],
+    queryFn: () => api.get<HistoryData>(`/susu/${groupSlug}/history`).then(getData),
+  })
+
+  if (isLoading) return <div className="text-center py-10 text-gray-500 text-sm">Loading…</div>
+  if (!data || data.members.length === 0) return (
+    <div className="text-center py-10 text-gray-500 text-sm">No history yet.</div>
+  )
+
+  const visibleCycles = data.members[0]?.cycles ?? []
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-gray-800">
+            <th className="text-left px-3 py-2.5 font-medium text-gray-400 whitespace-nowrap">Member</th>
+            {visibleCycles.map(c => (
+              <th
+                key={c.cycle_number}
+                className={`px-2 py-2.5 font-medium text-center whitespace-nowrap ${
+                  c.cycle_number === data.current_cycle ? 'text-brand-300' : 'text-gray-500'
+                }`}
+              >
+                #{c.cycle_number}
+                {c.cycle_number === data.current_cycle && (
+                  <span className="block text-brand-500/60 text-[10px]">now</span>
+                )}
+              </th>
+            ))}
+            <th className="text-right px-3 py-2.5 font-medium text-gray-400">Total paid</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-800/60">
+          {data.members.map(m => {
+            const paidCount = m.cycles.filter(c => c.paid).length
+            const doneCycles = m.cycles.filter(c => c.cycle_number <= data.current_cycle)
+            const doneCount = doneCycles.length
+            return (
+              <tr key={m.member_id} className="hover:bg-gray-800/30 transition-colors">
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                  <span className="text-white font-medium">{m.member_name}</span>
+                  {m.payout_position && (
+                    <span className="text-gray-600 ml-1.5">#{m.payout_position}</span>
+                  )}
+                </td>
+                {m.cycles.map(c => (
+                  <td key={c.cycle_number} className="px-2 py-2.5 text-center">
+                    {c.cycle_number > data.current_cycle ? (
+                      <span className="text-gray-700">–</span>
+                    ) : c.paid ? (
+                      <span className="text-emerald-400" title={c.paid_via ?? ''}>✓</span>
+                    ) : (
+                      <span className="text-red-400/70">✗</span>
+                    )}
+                  </td>
+                ))}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <span className={`font-semibold ${
+                    paidCount === doneCount && doneCount > 0
+                      ? 'text-emerald-400'
+                      : paidCount === 0 && doneCount > 0
+                        ? 'text-red-400'
+                        : 'text-yellow-400'
+                  }`}>
+                    {paidCount}/{doneCount}
+                  </span>
+                  <span className="text-gray-600 ml-1">{fmt(parseFloat(m.total_contributed))}</span>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+type DetailTab = 'current' | 'schedule' | 'members' | 'history'
 
 export default function SusuDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const [tab, setTab] = useState<DetailTab>('current')
 
   const { data: group, isLoading } = useQuery<SusuDetail>({
     queryKey: ['susu', slug],
     queryFn: () => api.get<SusuDetail>(`/susu/${slug}`).then(getData),
     refetchInterval: 30_000,
+  })
+
+  const startGroup = useMutation({
+    mutationFn: () => api.post<SusuDetail>(`/susu/${slug}/start`).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', slug] }),
   })
 
   const markPayoutSent = useMutation({
@@ -145,20 +253,19 @@ export default function SusuDetail() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', slug] }),
   })
 
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="text-center py-20 text-gray-500">Loading…</div>
-      </Layout>
-    )
-  }
+  const advanceCycle = useMutation({
+    mutationFn: () => api.post<SusuDetail>(`/susu/${slug}/advance`).then(getData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      qc.invalidateQueries({ queryKey: ['susu-history', slug] })
+    },
+  })
 
+  if (isLoading) {
+    return <Layout><div className="text-center py-20 text-gray-500">Loading…</div></Layout>
+  }
   if (!group) {
-    return (
-      <Layout>
-        <div className="text-center py-20 text-gray-500">Group not found.</div>
-      </Layout>
-    )
+    return <Layout><div className="text-center py-20 text-gray-500">Group not found.</div></Layout>
   }
 
   const cycle = group.current_cycle_detail
@@ -167,6 +274,15 @@ export default function SusuDetail() {
   const pct = potAmount > 0 ? Math.min((collectedAmount / potAmount) * 100, 100) : 0
   const paidCount = cycle ? cycle.contributions.filter(c => c.paid).length : 0
   const totalCount = cycle ? cycle.contributions.length : 0
+  const cycleIsPaidOut = cycle?.status === 'paid_out'
+  const isLastCycle = group.current_cycle >= group.total_cycles
+
+  const TABS: { key: DetailTab; label: string }[] = [
+    { key: 'current',  label: 'Current Cycle' },
+    { key: 'history',  label: 'History' },
+    { key: 'schedule', label: 'Schedule' },
+    { key: 'members',  label: 'Members' },
+  ]
 
   return (
     <Layout>
@@ -187,8 +303,9 @@ export default function SusuDetail() {
           </div>
           <div className="text-right">
             <span className={`inline-block text-xs px-3 py-1.5 rounded-full capitalize font-medium ${
-              group.status === 'active' ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/40'
+              group.status === 'active'    ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/40'
               : group.status === 'forming' ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-800/40'
+              : group.status === 'completed' ? 'bg-purple-900/40 text-purple-300 border border-purple-800/40'
               : 'bg-gray-800 text-gray-400 border border-gray-700'
             }`}>
               {group.status}
@@ -199,14 +316,57 @@ export default function SusuDetail() {
           </div>
         </div>
 
-        {/* Current cycle */}
-        {cycle && (
+        {/* Start button for forming groups */}
+        {group.status === 'forming' && (
+          <div className="rounded-xl border border-yellow-800/50 bg-yellow-900/10 p-5">
+            <p className="text-sm font-semibold text-yellow-300 mb-1">Ready to start?</p>
+            <p className="text-xs text-gray-400 mb-4">
+              {group.total_members} member{group.total_members !== 1 ? 's' : ''} added.
+              Starting will lock the member list and create all {group.total_cycles} cycle records.
+            </p>
+            <button
+              onClick={() => startGroup.mutate()}
+              disabled={startGroup.isPending || group.total_members < 2}
+              className="px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg
+                hover:bg-brand-500 disabled:opacity-50 transition-colors"
+            >
+              {startGroup.isPending ? 'Starting…' : '▶ Start Susu'}
+            </button>
+            {group.total_members < 2 && (
+              <p className="text-xs text-yellow-600 mt-2">Need at least 2 members to start.</p>
+            )}
+          </div>
+        )}
+
+        {/* Tabs */}
+        {group.status === 'active' && (
+          <div className="flex gap-1 border-b border-gray-800">
+            {TABS.map(t => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  tab === t.key
+                    ? 'border-brand-500 text-brand-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Current cycle tab */}
+        {(tab === 'current' || group.status !== 'active') && cycle && (
           <div className="rounded-xl border border-gray-700 bg-gray-900 p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="font-semibold text-white">Cycle {cycle.cycle_number} — Current</h2>
+                <h2 className="font-semibold text-white">Cycle {cycle.cycle_number}</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Due {formatDate(cycle.due_date)} · Recipient: <span className="text-brand-300 font-medium">{cycle.recipient_name}</span>
+                  Due {formatDate(cycle.due_date)} · Recipient:{' '}
+                  <span className="text-brand-300 font-medium">{cycle.recipient_name}</span>
                 </p>
               </div>
               <div className="text-right">
@@ -240,25 +400,64 @@ export default function SusuDetail() {
               ))}
             </div>
 
+            {/* Mark payout sent */}
             {cycle.status === 'collected' && !cycle.payout_sent_at && (
               <button
                 onClick={() => markPayoutSent.mutate(cycle.cycle_number)}
                 disabled={markPayoutSent.isPending}
-                className="mt-4 w-full py-2.5 bg-purple-700 text-white text-sm font-semibold rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors"
+                className="mt-4 w-full py-2.5 bg-purple-700 text-white text-sm font-semibold rounded-lg
+                  hover:bg-purple-600 disabled:opacity-50 transition-colors"
               >
-                {markPayoutSent.isPending ? 'Marking…' : '💸 Mark Payout Sent to ' + cycle.recipient_name}
+                {markPayoutSent.isPending ? 'Marking…' : `💸 Mark Payout Sent to ${cycle.recipient_name}`}
               </button>
             )}
             {cycle.payout_sent_at && (
-              <div className="mt-4 text-center text-xs text-purple-400">
+              <p className="mt-3 text-center text-xs text-purple-400">
                 Payout sent {new Date(cycle.payout_sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </div>
+              </p>
+            )}
+
+            {/* Advance to next cycle */}
+            {cycleIsPaidOut && !isLastCycle && (
+              <button
+                onClick={() => advanceCycle.mutate()}
+                disabled={advanceCycle.isPending}
+                className="mt-3 w-full py-2.5 bg-brand-700 text-white text-sm font-semibold rounded-lg
+                  hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              >
+                {advanceCycle.isPending
+                  ? 'Advancing…'
+                  : `→ Advance to Cycle ${group.current_cycle + 1}`}
+              </button>
+            )}
+            {cycleIsPaidOut && isLastCycle && (
+              <button
+                onClick={() => advanceCycle.mutate()}
+                disabled={advanceCycle.isPending}
+                className="mt-3 w-full py-2.5 bg-gray-700 text-gray-300 text-sm font-semibold rounded-lg
+                  hover:bg-gray-600 disabled:opacity-50 transition-colors"
+              >
+                {advanceCycle.isPending ? 'Completing…' : '🏁 Complete Susu'}
+              </button>
             )}
           </div>
         )}
 
-        {/* Payout schedule */}
-        {group.cycle_summaries.length > 0 && (
+        {/* History tab */}
+        {tab === 'history' && group.status === 'active' && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Contribution History</h2>
+              <p className="text-xs text-gray-500 mt-0.5">✓ paid · ✗ missed · – future</p>
+            </div>
+            <div className="p-4">
+              <HistoryTab groupSlug={slug!} />
+            </div>
+          </div>
+        )}
+
+        {/* Schedule tab */}
+        {(tab === 'schedule' || group.status !== 'active') && group.cycle_summaries.length > 0 && (
           <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800">
               <h2 className="font-semibold text-white">Payout Schedule</h2>
@@ -275,47 +474,61 @@ export default function SusuDetail() {
           </div>
         )}
 
-        {/* Members */}
-        <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-            <h2 className="font-semibold text-white">Members ({group.total_members})</h2>
-            <button
-              onClick={() => navigate(`/s/${slug}`)}
-              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
-            >
-              Public page →
-            </button>
-          </div>
-          <div className="divide-y divide-gray-800">
-            {group.members.map(m => {
-              const currentContrib = cycle?.contributions.find(c => c.member_id === m.id)
-              const isPaid = currentContrib?.paid ?? false
-              const isRecipient = cycle?.recipient_member_id === m.id
-              return (
-                <div key={m.id} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    {isRecipient && (
-                      <span className="text-sm" title="This cycle's recipient">🏆</span>
-                    )}
-                    <div>
-                      <div className="text-sm text-white font-medium">{m.name}</div>
-                      <div className="text-xs text-gray-500">{m.phone}</div>
+        {/* Members tab */}
+        {(tab === 'members' || group.status !== 'active') && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="font-semibold text-white">Members ({group.total_members})</h2>
+              <button
+                onClick={() => navigate(`/s/${slug}`)}
+                className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+              >
+                Public page →
+              </button>
+            </div>
+            <div className="divide-y divide-gray-800">
+              {group.members.map(m => {
+                const currentContrib = cycle?.contributions.find(c => c.member_id === m.id)
+                const isPaid = currentContrib?.paid ?? false
+                const isRecipient = cycle?.recipient_member_id === m.id
+                return (
+                  <div key={m.id} className="flex items-center justify-between px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      {isRecipient && (
+                        <span className="text-sm" title="This cycle's recipient">🏆</span>
+                      )}
+                      <div>
+                        <div className="text-sm text-white font-medium">{m.name}</div>
+                        <div className="text-xs text-gray-500">{m.phone}</div>
+                      </div>
+                      {m.payout_position && (
+                        <span className="text-xs text-gray-600">#{m.payout_position}</span>
+                      )}
                     </div>
-                    {m.payout_position && (
-                      <span className="text-xs text-gray-600">#{m.payout_position}</span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-xs font-medium ${isPaid ? 'text-emerald-400' : 'text-gray-500'}`}>
-                      {isPaid ? '✓ Paid this cycle' : '○ Pending'}
+                    <div className="text-right">
+                      <div className={`text-xs font-medium ${isPaid ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        {isPaid ? '✓ Paid this cycle' : '○ Pending'}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        Total: {fmt(parseFloat(m.total_contributed))}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-600">Total: {fmt(parseFloat(m.total_contributed))}</div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Completed state */}
+        {group.status === 'completed' && (
+          <div className="rounded-xl border border-purple-800/40 bg-purple-900/10 px-5 py-4 text-center">
+            <p className="text-purple-300 font-semibold text-sm">🏁 Susu completed</p>
+            <p className="text-xs text-gray-500 mt-1">
+              All {group.total_cycles} cycles have been paid out.
+            </p>
+          </div>
+        )}
       </div>
     </Layout>
   )
