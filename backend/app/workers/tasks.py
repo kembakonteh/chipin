@@ -16,6 +16,7 @@ from app.models.campaign import Campaign, VisibilityMode
 from app.models.contributor import Contributor
 from app.models.user import User
 from app.workers.cards import generate_milestone_card
+from app.workers.deadlines import process_campaign_deadlines
 from app.workers.recurring import process_recurring_schedules, send_recurring_reminders
 from app.workers.susu import process_susu_cycles
 from app.workers.whatsapp import (
@@ -177,11 +178,14 @@ class WorkerSettings:
         send_recurring_reminders,
         # Susu / tontine
         process_susu_cycles,
+        # Campaign deadlines
+        process_campaign_deadlines,
     ]
     cron_jobs = [
         arq_cron(process_recurring_schedules, hour=8, minute=0),
         arq_cron(send_recurring_reminders, hour=9, minute=0),
         arq_cron(process_susu_cycles, hour=8, minute=30),
+        arq_cron(process_campaign_deadlines, hour=8, minute=15),
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     max_jobs = 10

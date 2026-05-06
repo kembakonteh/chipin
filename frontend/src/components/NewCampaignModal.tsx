@@ -16,6 +16,7 @@ interface Form {
   goal_amount: string
   contribution_note: string
   amount_per_person: string
+  due_date: string
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
   template_id: string | null
@@ -38,6 +39,7 @@ const INIT_FORM: Form = {
   goal_amount: '',
   contribution_note: '',
   amount_per_person: '',
+  due_date: '',
   visibility_mode: 'full_name',
   allow_anonymous_contributions: true,
   template_id: null,
@@ -121,6 +123,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
         goal_amount: form.has_goal && form.goal_amount ? parseFloat(form.goal_amount) : null,
         contribution_note: !form.has_goal && form.contribution_note ? form.contribution_note.trim() : null,
         amount_per_person: form.amount_per_person ? parseFloat(form.amount_per_person) : null,
+        due_date: form.due_date || null,
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
         ...(form.template_id ? { template_id: form.template_id } : {}),
@@ -398,6 +401,23 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Due date */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">
+                Payment deadline <span className="text-gray-600">(optional)</span>
+              </label>
+              <input
+                type="date"
+                value={form.due_date}
+                onChange={e => setF('due_date', e.target.value)}
+                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white focus:border-brand-500 focus:outline-none"
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                Auto-sends reminders 7, 3 &amp; 1 day(s) before. Campaign auto-completes when passed.
+              </p>
             </div>
 
             {/* Visibility */}

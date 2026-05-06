@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { Campaign, Contributor, RecurringSchedule } from '../types'
-import { computeStats, fmt } from '../types'
+import { computeStats, deadlineInfo, fmt } from '../types'
 import StatusBadge from './StatusBadge'
 import { CAMPAIGN_TYPES } from './CampaignTypeSelector'
 
@@ -35,6 +35,12 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
   })
 
   const stats = contributors ? computeStats(campaign, contributors) : null
+  const deadline = deadlineInfo(campaign.due_date ?? null)
+
+  const deadlineBadgeClass =
+    deadline.urgency === 'overdue' || deadline.urgency === 'today'   ? 'bg-red-900/50 text-red-300 border-red-800/40'
+    : deadline.urgency === 'tomorrow' || deadline.urgency === 'soon' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-800/40'
+    : 'bg-gray-800 text-gray-400 border-gray-700'
 
   return (
     <div
@@ -68,7 +74,15 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
             </span>
           </div>
         </div>
-        <StatusBadge status={campaign.status} />
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <StatusBadge status={campaign.status} />
+          {deadline.urgency && campaign.status === 'active' && (
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${deadlineBadgeClass}`}>
+              {deadline.urgency === 'overdue' ? '⚠ ' : deadline.urgency === 'today' ? '🔴 ' : deadline.urgency === 'tomorrow' ? '🟡 ' : '📅 '}
+              {deadline.labelShort}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}

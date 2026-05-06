@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { BASE_URL } from '../lib/api'
 import type { CampaignType } from '../types'
-import { fmt } from '../types'
+import { deadlineInfo, fmt } from '../types'
 import ProgressRing from '../components/ProgressRing'
 
 const MILESTONES = [25, 50, 75, 100] as const
@@ -34,6 +34,7 @@ interface PublicCampaign {
   campaign_type: CampaignType
   goal_amount: string | null
   contribution_note: string | null
+  due_date: string | null
   amount_per_person: string | null
   currency: string
   allow_anonymous_contributions: boolean
@@ -372,6 +373,25 @@ export default function PublicCampaign() {
             </p>
           )}
         </div>
+
+        {/* Deadline banner */}
+        {(() => {
+          const dl = deadlineInfo(campaign.due_date)
+          if (!dl.urgency || !isActive) return null
+          const styles = {
+            overdue:  'bg-red-500/20 border-red-400/30 text-red-200',
+            today:    'bg-red-500/20 border-red-400/30 text-red-200',
+            tomorrow: 'bg-yellow-500/20 border-yellow-400/30 text-yellow-200',
+            soon:     'bg-yellow-500/20 border-yellow-400/30 text-yellow-200',
+            upcoming: 'bg-white/10 border-white/20 text-brand-100',
+          }
+          const icons = { overdue: '⚠️', today: '🔴', tomorrow: '🟡', soon: '⏰', upcoming: '📅' }
+          return (
+            <div className={`mx-auto mb-4 max-w-xs rounded-xl border px-4 py-2 text-center text-sm font-medium ${styles[dl.urgency]}`}>
+              {icons[dl.urgency]} {dl.label}
+            </div>
+          )
+        })()}
 
         {/* Stat pills */}
         <div className="flex justify-center gap-2 flex-wrap">

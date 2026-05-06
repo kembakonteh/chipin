@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel
@@ -32,6 +32,7 @@ class PublicCampaignResponse(BaseModel):
     campaign_type: CampaignType
     goal_amount: Optional[Decimal]
     contribution_note: Optional[str] = None
+    due_date: Optional[date] = None
     amount_per_person: Optional[Decimal]
     currency: str
     collection_currency: str

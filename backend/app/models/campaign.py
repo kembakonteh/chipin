@@ -1,10 +1,10 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -99,6 +99,7 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
         default=CampaignStatus.active,
     )
     whatsapp_reminders_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     platform_fee_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, default=Decimal("2.50")
     )

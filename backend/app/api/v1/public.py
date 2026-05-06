@@ -152,6 +152,7 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         campaign_type=campaign.campaign_type,
         goal_amount=campaign.goal_amount,
         contribution_note=campaign.contribution_note,
+        due_date=campaign.due_date,
         amount_per_person=campaign.amount_per_person,
         currency=campaign.currency,
         collection_currency=collection_cur,

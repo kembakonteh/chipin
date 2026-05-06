@@ -101,6 +101,7 @@ export interface Campaign {
   allow_anonymous_contributions: boolean
   status: CampaignStatus
   whatsapp_reminders_enabled: boolean
+  due_date: string | null
   platform_fee_pct: string
   org_id: string | null
   created_at: string
@@ -333,4 +334,23 @@ export function fmtTime(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
+}
+
+export type DeadlineUrgency = 'overdue' | 'today' | 'tomorrow' | 'soon' | 'upcoming' | null
+
+export function deadlineInfo(due_date: string | null): {
+  daysLeft: number | null
+  urgency: DeadlineUrgency
+  label: string | null
+  labelShort: string | null
+} {
+  if (!due_date) return { daysLeft: null, urgency: null, label: null, labelShort: null }
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due = new Date(due_date + 'T00:00:00'); due.setHours(0, 0, 0, 0)
+  const daysLeft = Math.round((due.getTime() - today.getTime()) / 86_400_000)
+  if (daysLeft < 0)  return { daysLeft, urgency: 'overdue',  label: 'Deadline passed',    labelShort: 'Overdue' }
+  if (daysLeft === 0) return { daysLeft, urgency: 'today',    label: 'Due today!',          labelShort: 'Due today' }
+  if (daysLeft === 1) return { daysLeft, urgency: 'tomorrow', label: 'Due tomorrow',        labelShort: 'Tomorrow' }
+  if (daysLeft <= 7)  return { daysLeft, urgency: 'soon',     label: `Due in ${daysLeft} days`, labelShort: `${daysLeft}d left` }
+  return { daysLeft, urgency: 'upcoming', label: `Due ${fmtDate(due_date)}`, labelShort: fmtDate(due_date) }
 }

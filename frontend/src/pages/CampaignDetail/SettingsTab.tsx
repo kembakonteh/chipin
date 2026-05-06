@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import type { Campaign, CampaignType, Frequency, Org, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
+import { deadlineInfo } from '../../types'
 import CampaignTypeSelector from '../../components/CampaignTypeSelector'
 
 interface Form {
@@ -18,6 +19,7 @@ interface Form {
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
   whatsapp_reminders_enabled: boolean
+  due_date: string
   org_id: string | null
 }
 
@@ -34,6 +36,7 @@ function toForm(c: Campaign): Form {
     visibility_mode: c.visibility_mode,
     allow_anonymous_contributions: c.allow_anonymous_contributions,
     whatsapp_reminders_enabled: c.whatsapp_reminders_enabled,
+    due_date: c.due_date ?? '',
     org_id: c.org_id ?? null,
   }
 }
@@ -72,6 +75,7 @@ export default function SettingsTab({ campaign }: Props) {
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
         whatsapp_reminders_enabled: form.whatsapp_reminders_enabled,
+        due_date: form.due_date || null,
         org_id: form.org_id || null,
       }).then(r => r.data),
     onSuccess: () => {
@@ -157,6 +161,35 @@ export default function SettingsTab({ campaign }: Props) {
               Tip: let contributors know what's expected — a minimum, a suggested amount, or just encourage them to give what they can.
             </p>
           )}
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Payment deadline <span className="text-gray-600">(optional)</span></label>
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={form.due_date}
+              onChange={(e) => set('due_date', e.target.value)}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                text-sm text-white focus:border-brand-500 focus:outline-none"
+            />
+            {form.due_date && (() => {
+              const { urgency, label } = deadlineInfo(form.due_date)
+              const color = urgency === 'overdue' || urgency === 'today' ? 'text-red-400'
+                : urgency === 'tomorrow' || urgency === 'soon' ? 'text-yellow-400'
+                : 'text-gray-400'
+              return <span className={`text-xs ${color}`}>{label}</span>
+            })()}
+            {form.due_date && (
+              <button type="button" onClick={() => set('due_date', '')}
+                className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+                ✕ clear
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-600 mt-1">
+            Reminders auto-send at 7, 3, and 1 day(s) before. Campaign auto-completes when passed.
+          </p>
         </div>
 
         <div>
