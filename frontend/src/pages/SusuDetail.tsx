@@ -230,11 +230,39 @@ function HistoryTab({ groupSlug }: { groupSlug: string }) {
 
 type DetailTab = 'current' | 'schedule' | 'members' | 'history'
 
+interface AddMemberForm {
+  name: string
+  phone: string
+  email: string
+}
+
 export default function SusuDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [tab, setTab] = useState<DetailTab>('current')
+  const [showAdd, setShowAdd] = useState(false)
+  const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '' })
+  const [addError, setAddError] = useState('')
+
+  const addMember = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${slug}/members`, {
+        name: addForm.name.trim(),
+        phone: addForm.phone.trim(),
+        email: addForm.email.trim() || null,
+      }).then(getData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      setAddForm({ name: '', phone: '', email: '' })
+      setAddError('')
+      setShowAdd(false)
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setAddError(msg ?? 'Failed to add member.')
+    },
+  })
 
   const { data: group, isLoading } = useQuery<SusuDetail>({
     queryKey: ['susu', slug],
@@ -479,14 +507,83 @@ export default function SusuDetail() {
           <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
               <h2 className="font-semibold text-white">Members ({group.total_members})</h2>
-              <button
-                onClick={() => navigate(`/s/${slug}`)}
-                className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
-              >
-                Public page →
-              </button>
+              <div className="flex items-center gap-3">
+                {group.status !== 'completed' && (
+                  <button
+                    onClick={() => { setShowAdd(s => !s); setAddError('') }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-brand-700/40 text-brand-300
+                      hover:bg-brand-700/70 border border-brand-700/50 transition-colors"
+                  >
+                    {showAdd ? '✕ Cancel' : '＋ Add member'}
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate(`/s/${slug}`)}
+                  className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                >
+                  Public page →
+                </button>
+              </div>
             </div>
+
+            {/* Inline add-member form */}
+            {showAdd && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!addForm.name.trim() || !addForm.phone.trim()) return
+                  setAddError('')
+                  addMember.mutate()
+                }}
+                className="px-5 py-4 border-b border-gray-800 bg-gray-800/40 space-y-3"
+              >
+                <p className="text-xs font-medium text-gray-400">New member</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    required
+                    type="text"
+                    placeholder="Full name *"
+                    value={addForm.name}
+                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
+                  <input
+                    required
+                    type="tel"
+                    placeholder="Phone *"
+                    value={addForm.phone}
+                    onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
+                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <input
+                  type="email"
+                  placeholder="Email (optional)"
+                  value={addForm.email}
+                  onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
+                    text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                />
+                {addError && <p className="text-xs text-red-400">{addError}</p>}
+                <button
+                  type="submit"
+                  disabled={addMember.isPending}
+                  className="px-4 py-2 bg-brand-600 text-white text-sm font-semibold rounded-lg
+                    hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                >
+                  {addMember.isPending ? 'Adding…' : 'Add member'}
+                </button>
+              </form>
+            )}
+
             <div className="divide-y divide-gray-800">
+              {group.members.length === 0 && !showAdd && (
+                <div className="px-5 py-8 text-center text-sm text-gray-500">
+                  No members yet. Click "＋ Add member" to get started.
+                </div>
+              )}
               {group.members.map(m => {
                 const currentContrib = cycle?.contributions.find(c => c.member_id === m.id)
                 const isPaid = currentContrib?.paid ?? false
