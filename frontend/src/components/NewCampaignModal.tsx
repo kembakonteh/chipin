@@ -282,10 +282,19 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
                 value={form.description}
                 onChange={e => setF('description', e.target.value)}
                 rows={2}
-                placeholder="Optional details about this campaign…"
+                placeholder={
+                  form.has_goal
+                    ? 'Optional details about this campaign…'
+                    : 'e.g. Members can contribute any amount they wish. Every bit helps!'
+                }
                 className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
                   text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
               />
+              {!form.has_goal && !form.description && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Tip: let contributors know what's expected — e.g. a minimum, a suggested amount, or just encourage them to give what they can.
+                </p>
+              )}
             </div>
 
             {/* Campaign type — only shown when starting from scratch; templates set this automatically */}

@@ -141,9 +141,19 @@ export default function SettingsTab({ campaign }: Props) {
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
             rows={2}
+            placeholder={
+              form.has_goal
+                ? 'Optional details about this campaign…'
+                : 'e.g. Members can contribute any amount they wish. Every bit helps!'
+            }
             className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
-              text-sm text-white focus:border-brand-500 focus:outline-none resize-none"
+              text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none resize-none"
           />
+          {!form.has_goal && !form.description && (
+            <p className="text-xs text-gray-500 mt-1">
+              Tip: let contributors know what's expected — a minimum, a suggested amount, or just encourage them to give what they can.
+            </p>
+          )}
         </div>
 
         <div>
