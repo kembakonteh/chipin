@@ -132,32 +132,41 @@ function AddMembersModal({ orgSlug, onClose }: { orgSlug: string; onClose: () =>
     }
   }
 
+  const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">Add Members</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Enter members manually or import a CSV file.</p>
         </div>
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
+          {/* Column headers */}
+          <div className="grid grid-cols-3 gap-2">
+            <p className="text-xs font-medium text-gray-500">Name *</p>
+            <p className="text-xs font-medium text-gray-500">Phone</p>
+            <p className="text-xs font-medium text-gray-500">Email</p>
+          </div>
           {/* Manual rows */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {rows.map((row, i) => (
               <div key={i} className="grid grid-cols-3 gap-2">
                 <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Name *"
+                  className={inputCls}
+                  placeholder="Full name"
                   value={row.name}
                   onChange={e => setRows(prev => prev.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
                 />
                 <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Phone"
+                  className={inputCls}
+                  placeholder="+1 202 555 0100"
                   value={row.phone}
                   onChange={e => setRows(prev => prev.map((r, j) => j === i ? { ...r, phone: e.target.value } : r))}
                 />
                 <input
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Email"
+                  className={inputCls}
+                  placeholder="Optional"
                   value={row.email}
                   onChange={e => setRows(prev => prev.map((r, j) => j === i ? { ...r, email: e.target.value } : r))}
                 />
@@ -166,14 +175,14 @@ function AddMembersModal({ orgSlug, onClose }: { orgSlug: string; onClose: () =>
           </div>
           <button
             onClick={() => setRows(prev => [...prev, { name: '', phone: '', email: '' }])}
-            className="text-sm text-emerald-600 hover:underline"
+            className="text-sm text-brand-600 hover:underline font-medium"
           >
             + Add another row
           </button>
 
           <div className="border-t border-gray-100 pt-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Or import from CSV</p>
-            <p className="text-xs text-gray-400 mb-2">Columns: name, phone, email (header row required)</p>
+            <p className="text-sm font-medium text-gray-700 mb-1">Or import from CSV</p>
+            <p className="text-xs text-gray-400 mb-3">Columns: name, phone, email (header row required)</p>
             <input
               ref={fileRef}
               type="file"
@@ -184,19 +193,21 @@ function AddMembersModal({ orgSlug, onClose }: { orgSlug: string; onClose: () =>
             <button
               onClick={() => fileRef.current?.click()}
               disabled={csvLoading}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
             >
               {csvLoading ? 'Uploading…' : 'Upload CSV'}
             </button>
             {csvResult && (
-              <p className="text-sm text-emerald-700 mt-2">
+              <p className="text-sm text-emerald-600 mt-2 font-medium">
                 ✓ Imported {csvResult.imported}, skipped {csvResult.skipped}
               </p>
             )}
           </div>
         </div>
         <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+            Cancel
+          </button>
           <button
             onClick={() => {
               const valid = rows.filter(r => r.name.trim())
@@ -207,7 +218,7 @@ function AddMembersModal({ orgSlug, onClose }: { orgSlug: string; onClose: () =>
               })))
             }}
             disabled={!rows.some(r => r.name.trim()) || addMembers.isPending}
-            className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+            className="px-5 py-2 text-sm font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
           >
             {addMembers.isPending ? 'Adding…' : 'Add Members'}
           </button>
