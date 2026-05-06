@@ -286,11 +286,13 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               />
             </div>
 
-            {/* Campaign type */}
-            <div>
-              <label className="block text-xs text-gray-400 mb-2">Campaign Type</label>
-              <CampaignTypeSelector value={form.campaign_type} onChange={handleTypeChange} />
-            </div>
+            {/* Campaign type — only shown when starting from scratch; templates set this automatically */}
+            {!form.template_id && (
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">Campaign Type</label>
+                <CampaignTypeSelector value={form.campaign_type} onChange={handleTypeChange} />
+              </div>
+            )}
 
             {/* Goal + Per person */}
             <div className="grid grid-cols-2 gap-3">
