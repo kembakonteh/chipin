@@ -7,6 +7,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.campaign import Campaign
+    from app.models.payout import PayoutMethod
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -19,3 +20,6 @@ class User(Base, UUIDMixin, TimestampMixin):
     stripe_account_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     campaigns: Mapped[List["Campaign"]] = relationship("Campaign", back_populates="owner")
+    payout_methods: Mapped[List["PayoutMethod"]] = relationship(
+        "PayoutMethod", back_populates="user"
+    )

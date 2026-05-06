@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.contributor import Contributor
+from app.models.payout import Payout, PayoutStatus
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -332,4 +333,66 @@ async def check_campaign_completion(ctx: dict, *, campaign_id: str) -> None:
             phone=owner.phone,
             template_name="chipin_campaign_complete",
             params=[campaign.title, f"{total_raised:.2f}", str(paid_count)],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — Payout completion notification
+# ---------------------------------------------------------------------------
+
+async def notify_payout_completion(ctx: dict, *, payout_id: str) -> None:
+    """
+    Notify the organizer (and beneficiary if phone on file) when a payout is initiated.
+    Message: 'Payout of GMD 42,000 sent to your Wave account. Reference: XXXXX. Arrives within 24 hours.'
+    """
+    async with AsyncSessionLocal() as db:
+        payout = await db.get(Payout, uuid.UUID(payout_id))
+        if not payout:
+            logger.warning("notify_payout_completion: payout %s not found", payout_id)
+            return
+
+        campaign = await db.get(Campaign, payout.campaign_id)
+        if not campaign:
+            return
+
+        from app.models.payout import PayoutMethod as _PM
+        method = await db.get(_PM, payout.payout_method_id)
+        if not method:
+            return
+
+        amount_str = f"{payout.payout_currency} {payout.payout_amount_local:,.0f}"
+        ref = payout.provider_reference or str(payout.id)[:8].upper()
+        message = (
+            f"Payout of {amount_str} sent to your {method.network_name} account. "
+            f"Reference: {ref}. Arrives within 24 hours."
+        )
+
+        # Re-use the internal plain-text helper defined in this module
+        async def _notify(phone: str) -> None:
+            if not settings.META_WHATSAPP_TOKEN or not settings.META_PHONE_NUMBER_ID:
+                return
+            url = f"{_META_BASE}/{settings.META_PHONE_NUMBER_ID}/messages"
+            payload: dict[str, Any] = {
+                "messaging_product": "whatsapp",
+                "to": phone,
+                "type": "text",
+                "text": {"body": message},
+            }
+            headers = {
+                "Authorization": f"Bearer {settings.META_WHATSAPP_TOKEN}",
+                "Content-Type": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=10) as client:
+                try:
+                    await client.post(url, json=payload, headers=headers)
+                except Exception as exc:
+                    logger.warning("Payout WA notify failed to %s: %s", phone, exc)
+
+        owner = await db.get(User, campaign.owner_id)
+        if owner and owner.phone:
+            await _notify(owner.phone)
+
+        logger.info(
+            "Payout notification sent for payout %s (%s → %s)",
+            payout_id, payout.payout_currency, method.network_name,
         )

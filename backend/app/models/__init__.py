@@ -1,5 +1,5 @@
 from app.models.beneficiary import Beneficiary
-from app.models.campaign import Campaign, CampaignStatus, CampaignType, VisibilityMode
+from app.models.campaign import Campaign, CampaignStatus, CampaignType, CollectionCurrency, PayoutCurrency, VisibilityMode
 from app.models.contributor import Contributor, PaidVia
 from app.models.org import Org, OrgMember, OrgMemberRole, OrgType
 from app.models.payment import Payment, PaymentStatus
@@ -15,6 +15,7 @@ from app.models.susu import (
     SusuPayoutOrder,
     SusuStatus,
 )
+from app.models.payout import MethodType, Payout, PayoutMethod, PayoutStatus
 from app.models.template import CampaignTemplate
 from app.models.user import User
 
@@ -23,7 +24,13 @@ __all__ = [
     "Campaign",
     "CampaignType",
     "CampaignStatus",
+    "CollectionCurrency",
+    "PayoutCurrency",
     "VisibilityMode",
+    "PayoutMethod",
+    "MethodType",
+    "Payout",
+    "PayoutStatus",
     "Contributor",
     "PaidVia",
     "Org",

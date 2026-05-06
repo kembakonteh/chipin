@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.core import sse_manager
 from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_arq
+from app.core.fx import convert as fx_convert
 from app.core.redis_client import get_redis
 from app.models.campaign import Campaign, CampaignStatus, VisibilityMode
 from app.models.contributor import Contributor
@@ -132,6 +133,16 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         for c in contributors
     ]
 
+    # Compute local-currency equivalents when payout_currency differs from collection currency
+    collection_cur = str(campaign.collection_currency.value if campaign.collection_currency else campaign.currency)
+    payout_cur = str(campaign.payout_currency.value) if campaign.payout_currency else None
+
+    goal_amount_local: Optional[Decimal] = None
+    total_raised_local: Optional[Decimal] = None
+    if payout_cur and payout_cur != collection_cur:
+        goal_amount_local = await fx_convert(campaign.goal_amount, collection_cur, payout_cur)
+        total_raised_local = await fx_convert(total_raised, collection_cur, payout_cur)
+
     return PublicCampaignResponse(
         slug=campaign.slug,
         title=campaign.title,
@@ -141,6 +152,10 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         goal_amount=campaign.goal_amount,
         amount_per_person=campaign.amount_per_person,
         currency=campaign.currency,
+        collection_currency=collection_cur,
+        payout_currency=payout_cur,
+        goal_amount_local=goal_amount_local,
+        total_raised_local=total_raised_local,
         allow_anonymous_contributions=campaign.allow_anonymous_contributions,
         total_raised=total_raised,
         contributor_count=len(contributors),

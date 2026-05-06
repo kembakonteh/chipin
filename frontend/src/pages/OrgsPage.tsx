@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
 import type { Org, OrgType } from '../types'
+import Layout from '../components/Layout'
 
 function getData<T>(r: AxiosResponse<T>): T { return r.data }
 
@@ -122,7 +123,8 @@ export default function OrgsPage() {
   })
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <Layout>
+    <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
@@ -191,5 +193,6 @@ export default function OrgsPage() {
 
       {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
     </div>
+    </Layout>
   )
 }

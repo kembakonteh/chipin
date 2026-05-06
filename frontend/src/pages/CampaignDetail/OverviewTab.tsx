@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import type { Beneficiary, Campaign, Contributor } from '../../types'
+import type { Beneficiary, Campaign, Contributor, Payout, PayoutMethod } from '../../types'
 import { computeStats, fmt } from '../../types'
 import ProgressRing from '../../components/ProgressRing'
 import CopyLinkBar from '../../components/CopyLinkBar'
@@ -44,6 +44,9 @@ export default function OverviewTab({ campaign, contributors }: Props) {
       {(campaign.campaign_type === 'memorial' || campaign.campaign_type === 'charity') && (
         <BeneficiaryCard campaign={campaign} />
       )}
+
+      {/* Send Funds — payout panel */}
+      <SendFundsPanel campaign={campaign} netBalance={stats.net} />
 
       {/* Earnings summary */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
@@ -139,6 +142,183 @@ function EarningsRow({ label, value, accent, muted }: {
 }
 
 // ── Beneficiary card ──────────────────────────────────────────────────────────
+
+// ── Payout status badge ───────────────────────────────────────────────────────
+
+function PayoutStatusBadge({ status }: { status: string }) {
+  const cfg: Record<string, string> = {
+    pending:    'bg-yellow-900/40 text-yellow-400 border-yellow-800',
+    processing: 'bg-blue-900/40 text-blue-400 border-blue-800',
+    completed:  'bg-green-900/40 text-green-400 border-green-800',
+    failed:     'bg-red-900/40 text-red-400 border-red-800',
+  }
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs capitalize ${cfg[status] ?? cfg.pending}`}>
+      {status}
+    </span>
+  )
+}
+
+// ── Send Funds panel ──────────────────────────────────────────────────────────
+
+function SendFundsPanel({ campaign, netBalance }: { campaign: Campaign; netBalance: number }) {
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [selectedMethod, setSelectedMethod] = useState('')
+  const [localPreview, setLocalPreview] = useState<string | null>(null)
+
+  const { data: methods = [] } = useQuery<PayoutMethod[]>({
+    queryKey: ['payout-methods'],
+    queryFn: () => api.get<PayoutMethod[]>('/users/payout-methods').then(r => r.data),
+  })
+
+  const { data: payouts = [] } = useQuery<Payout[]>({
+    queryKey: ['payouts', campaign.slug],
+    queryFn: () => api.get<Payout[]>(`/campaigns/${campaign.slug}/payouts`).then(r => r.data),
+  })
+
+  const verifiedMethods = methods.filter(m => m.is_verified)
+
+  const payoutMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/campaigns/${campaign.slug}/payout`, { payout_method_id: selectedMethod })
+        .then(r => r.data),
+    onSuccess: (data) => {
+      toast.success(
+        `Payout of ${data.payout_currency} ${Number(data.payout_amount_local).toLocaleString()} initiated!`
+      )
+      qc.invalidateQueries({ queryKey: ['payouts', campaign.slug] })
+      setOpen(false)
+    },
+    onError: (err: any) =>
+      toast.error(err?.response?.data?.detail ?? 'Payout failed'),
+  })
+
+  // Preview local amount when method is selected
+  async function handleMethodChange(id: string) {
+    setSelectedMethod(id)
+    setLocalPreview(null)
+    if (!id || !campaign.payout_currency) return
+    try {
+      const res = await api.get<{ payout_amount_local: string; payout_currency: string }>(
+        `/campaigns/${campaign.slug}/payout-preview?payout_method_id=${id}`
+      ).then(r => r.data).catch(() => null)
+      if (res) setLocalPreview(`${res.payout_currency} ${Number(res.payout_amount_local).toLocaleString()}`)
+    } catch { /* no-op */ }
+  }
+
+  if (netBalance <= 0 && payouts.length === 0) return null
+
+  const collectionCur = campaign.collection_currency ?? campaign.currency
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-white">Send Funds</h3>
+        {netBalance > 0 && !open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="rounded-lg bg-brand-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-500 transition-colors"
+          >
+            Send Funds
+          </button>
+        )}
+      </div>
+
+      {/* Balance summary */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="rounded-lg bg-gray-800 p-3">
+          <p className="text-xs text-gray-500">Available balance</p>
+          <p className="text-base font-bold text-white mt-0.5">
+            {fmt(netBalance, collectionCur)}
+          </p>
+        </div>
+        {campaign.payout_currency && (
+          <div className="rounded-lg bg-gray-800 p-3">
+            <p className="text-xs text-gray-500">Est. in {campaign.payout_currency}</p>
+            <p className="text-base font-bold text-brand-300 mt-0.5">
+              {localPreview ?? '—'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Initiate payout form */}
+      {open && (
+        <div className="space-y-3 border-t border-gray-800 pt-4">
+          {verifiedMethods.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              No verified payout methods.{' '}
+              <a href="/settings/payout" className="text-brand-400 hover:underline">Add one</a> first.
+            </p>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Payout method</label>
+                <select
+                  value={selectedMethod}
+                  onChange={e => handleMethodChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">Select method…</option>
+                  {verifiedMethods.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.network_name} — {m.account_name} ({m.account_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {localPreview && (
+                <p className="text-xs text-gray-400">
+                  You'll receive approximately <span className="text-white font-medium">{localPreview}</span>
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="flex-1 rounded-lg border border-gray-700 py-2 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => payoutMutation.mutate()}
+                  disabled={!selectedMethod || payoutMutation.isPending}
+                  className="flex-1 rounded-lg bg-brand-600 py-2 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                >
+                  {payoutMutation.isPending ? 'Sending…' : 'Confirm payout'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Payout history */}
+      {payouts.length > 0 && (
+        <div className="border-t border-gray-800 pt-4 mt-2">
+          <p className="text-xs font-medium text-gray-400 mb-3">Payout history</p>
+          <div className="space-y-2">
+            {payouts.map(p => (
+              <div key={p.id} className="flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-white font-medium">
+                    {p.payout_currency} {Number(p.payout_amount_local).toLocaleString()}
+                  </span>
+                  <span className="text-gray-500 ml-2">
+                    {new Date(p.initiated_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <PayoutStatusBadge status={p.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
   const [editing, setEditing] = useState(false)

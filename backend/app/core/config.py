@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     R2_BUCKET_NAME: str = "chipin"
     R2_PUBLIC_URL: str = ""  # e.g. https://pub-xxx.r2.dev or custom domain
 
+    # Multi-currency / FX
+    EXCHANGE_RATE_API_KEY: str = ""   # ExchangeRate-API v6 free key
+
+    # Payout providers
+    FLUTTERWAVE_SECRET_KEY: str = ""  # Flutterwave secret key (Nigeria + West Africa)
+    WAVE_API_KEY: str = ""            # Wave B2B API key (Gambia/Senegal)
+
     FRONTEND_URL: str = "http://localhost:5173"
     ALLOWED_ORIGINS: str = "http://localhost:5173"
 

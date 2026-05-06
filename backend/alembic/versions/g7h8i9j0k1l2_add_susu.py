@@ -24,6 +24,12 @@ def upgrade() -> None:
     op.execute("CREATE TYPE susucyclestatus AS ENUM ('collecting','collected','paid_out','missed')")
     op.execute("CREATE TYPE susupaidvia AS ENUM ('card','cash','zelle','cashapp')")
 
+    susufrequency = postgresql.ENUM("weekly", "biweekly", "monthly", name="susufrequency", create_type=False)
+    susustatus = postgresql.ENUM("forming", "active", "completed", "paused", name="susustatus", create_type=False)
+    susupayoutorder = postgresql.ENUM("fixed", "random", "bid", name="susupayoutorder", create_type=False)
+    susucyclestatus = postgresql.ENUM("collecting", "collected", "paid_out", "missed", name="susucyclestatus", create_type=False)
+    susupaidvia = postgresql.ENUM("card", "cash", "zelle", "cashapp", name="susupaidvia", create_type=False)
+
     op.create_table(
         "susu_groups",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
@@ -32,12 +38,12 @@ def upgrade() -> None:
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("slug", sa.String(255), unique=True, nullable=False),
         sa.Column("contribution_amount", sa.Numeric(12, 2), nullable=False),
-        sa.Column("frequency", sa.Enum("weekly", "biweekly", "monthly", name="susufrequency"), nullable=False),
+        sa.Column("frequency", susufrequency, nullable=False),
         sa.Column("total_members", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("current_cycle", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("total_cycles", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("status", sa.Enum("forming", "active", "completed", "paused", name="susustatus"), nullable=False, server_default="forming"),
-        sa.Column("payout_order", sa.Enum("fixed", "random", "bid", name="susupayoutorder"), nullable=False, server_default="fixed"),
+        sa.Column("status", susustatus, nullable=False, server_default="forming"),
+        sa.Column("payout_order", susupayoutorder, nullable=False, server_default="fixed"),
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("next_contribution_date", sa.Date(), nullable=True),
         sa.Column("next_payout_date", sa.Date(), nullable=True),
@@ -71,7 +77,7 @@ def upgrade() -> None:
         sa.Column("collected_amount", sa.Numeric(12, 2), nullable=False, server_default="0"),
         sa.Column("recipient_member_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("susu_members.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("payout_sent_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("status", sa.Enum("collecting", "collected", "paid_out", "missed", name="susucyclestatus"), nullable=False, server_default="collecting"),
+        sa.Column("status", susucyclestatus, nullable=False, server_default="collecting"),
     )
     op.create_index("ix_susu_cycles_group_id", "susu_cycles", ["group_id"])
     op.create_index("ix_susu_cycles_group_cycle", "susu_cycles", ["group_id", "cycle_number"], unique=True)
@@ -83,7 +89,7 @@ def upgrade() -> None:
         sa.Column("member_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("susu_members.id", ondelete="CASCADE"), nullable=False),
         sa.Column("amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("paid", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("paid_via", sa.Enum("card", "cash", "zelle", "cashapp", name="susupaidvia"), nullable=True),
+        sa.Column("paid_via", susupaidvia, nullable=True),
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("stripe_payment_intent_id", sa.String(255), nullable=True),
     )

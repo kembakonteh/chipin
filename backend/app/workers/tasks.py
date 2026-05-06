@@ -20,6 +20,7 @@ from app.workers.recurring import process_recurring_schedules, send_recurring_re
 from app.workers.susu import process_susu_cycles
 from app.workers.whatsapp import (
     check_campaign_completion,
+    notify_payout_completion,
     send_payment_confirmation,
     send_payment_reminder,
     send_reminder_blast,
@@ -168,6 +169,7 @@ class WorkerSettings:
         send_payment_reminder,
         send_reminder_blast,
         check_campaign_completion,
+        notify_payout_completion,
         # Viral growth cards
         generate_milestone_card,
         # Recurring collections

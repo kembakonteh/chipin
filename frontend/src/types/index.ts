@@ -70,6 +70,11 @@ export interface SusuDetail extends SusuGroup {
   cycle_summaries: SusuCycleSummary[]
 }
 
+export type CollectionCurrency = 'USD' | 'GBP' | 'EUR' | 'CAD'
+export type PayoutCurrency = 'USD' | 'GBP' | 'EUR' | 'GMD' | 'NGN' | 'GHS' | 'XOF'
+export type MethodType = 'mobile_money' | 'bank_transfer' | 'stripe_connect'
+export type PayoutStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
 export type CampaignType = 'general' | 'memorial' | 'charity' | 'celebration'
 export type VisibilityMode = 'full_name' | 'first_name_only' | 'anonymous'
 export type CampaignStatus = 'active' | 'paused' | 'completed' | 'archived'
@@ -89,6 +94,8 @@ export interface Campaign {
   goal_amount: string
   amount_per_person: string | null
   currency: string
+  collection_currency: CollectionCurrency
+  payout_currency: PayoutCurrency | null
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
   status: CampaignStatus
@@ -98,6 +105,40 @@ export interface Campaign {
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary | null
+}
+
+export interface PayoutMethod {
+  id: string
+  method_type: MethodType
+  country_code: string
+  network_name: string
+  account_number: string
+  account_name: string
+  is_verified: boolean
+  is_default: boolean
+  created_at: string
+}
+
+export interface Payout {
+  id: string
+  campaign_id: string
+  payout_method_id: string
+  gross_amount_usd: string
+  exchange_rate: string
+  payout_amount_local: string
+  payout_currency: string
+  transfer_fee: string
+  status: PayoutStatus
+  provider_reference: string | null
+  initiated_at: string
+  completed_at: string | null
+}
+
+export interface PublicCampaignFx {
+  collection_currency: string
+  payout_currency: string | null
+  goal_amount_local: string | null
+  total_raised_local: string | null
 }
 
 export interface Contributor {

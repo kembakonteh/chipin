@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from slugify import slugify
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -129,7 +130,13 @@ async def create_campaign(
             db.add(contributor)
 
     await db.commit()
-    await db.refresh(campaign)
+
+    result = await db.execute(
+        select(Campaign)
+        .where(Campaign.id == campaign.id)
+        .options(selectinload(Campaign.beneficiary))
+    )
+    campaign = result.scalar_one()
     return campaign
 
 
@@ -146,7 +153,8 @@ async def list_campaigns(
 
     offset = (page - 1) * size
     result = await db.execute(
-        base_q.order_by(Campaign.created_at.desc()).offset(offset).limit(size)
+        base_q.options(selectinload(Campaign.beneficiary))
+        .order_by(Campaign.created_at.desc()).offset(offset).limit(size)
     )
     items = result.scalars().all()
 
@@ -165,7 +173,6 @@ async def get_campaign(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Campaign)
         .where(Campaign.slug == slug, Campaign.owner_id == current_user.id)
@@ -188,8 +195,12 @@ async def update_campaign(
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(campaign, field, value)
     await db.commit()
-    await db.refresh(campaign)
-    return campaign
+    result = await db.execute(
+        select(Campaign)
+        .where(Campaign.id == campaign.id)
+        .options(selectinload(Campaign.beneficiary))
+    )
+    return result.scalar_one()
 
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)

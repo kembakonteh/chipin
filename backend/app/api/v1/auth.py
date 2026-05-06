@@ -27,7 +27,10 @@ async def send_link(
     db: AsyncSession = Depends(get_db),
 ):
     token = create_magic_token(body.email)
-    await send_magic_link(body.email, token)
+    dev_link = await send_magic_link(body.email, token)
+    if dev_link:
+        # SMTP not configured — return link directly so dev/test environments work
+        return {"message": "Magic link sent. Check your email.", "dev_link": dev_link}
     return {"message": "Magic link sent. Check your email."}
 
 

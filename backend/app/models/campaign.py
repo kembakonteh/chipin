@@ -15,8 +15,26 @@ if TYPE_CHECKING:
     from app.models.contributor import Contributor
     from app.models.org import Org
     from app.models.payment import Payment
+    from app.models.payout import Payout
     from app.models.user import User
     # noqa: keep imports
+
+
+class CollectionCurrency(str, enum.Enum):
+    USD = "USD"
+    GBP = "GBP"
+    EUR = "EUR"
+    CAD = "CAD"
+
+
+class PayoutCurrency(str, enum.Enum):
+    USD = "USD"
+    GBP = "GBP"
+    EUR = "EUR"
+    GMD = "GMD"
+    NGN = "NGN"
+    GHS = "GHS"
+    XOF = "XOF"
 
 
 class CampaignType(str, enum.Enum):
@@ -57,6 +75,15 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     goal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     amount_per_person: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    collection_currency: Mapped[CollectionCurrency] = mapped_column(
+        Enum(CollectionCurrency, name="collectioncurrency"),
+        nullable=False,
+        default=CollectionCurrency.USD,
+    )
+    payout_currency: Mapped[Optional[PayoutCurrency]] = mapped_column(
+        Enum(PayoutCurrency, name="payoutcurrency"),
+        nullable=True,
+    )
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     visibility_mode: Mapped[VisibilityMode] = mapped_column(
         Enum(VisibilityMode, name="visibilitymode"),
@@ -85,6 +112,7 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     org: Mapped[Optional["Org"]] = relationship("Org", back_populates="campaigns")
     contributors: Mapped[List["Contributor"]] = relationship("Contributor", back_populates="campaign")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="campaign")
+    payouts: Mapped[List["Payout"]] = relationship("Payout", back_populates="campaign")
     beneficiary: Mapped[Optional["Beneficiary"]] = relationship(
         "Beneficiary", back_populates="campaign", uselist=False
     )

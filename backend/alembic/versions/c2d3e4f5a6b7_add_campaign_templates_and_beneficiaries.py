@@ -18,21 +18,20 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    campaigntype = postgresql.ENUM("general", "memorial", "charity", "celebration", name="campaigntype", create_type=False)
+    visibilitymode = postgresql.ENUM("full_name", "first_name_only", "anonymous", name="visibilitymode", create_type=False)
+
     op.create_table(
         "campaign_templates",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(100), nullable=False),
-        sa.Column(
-            "campaign_type",
-            sa.Enum("general", "memorial", "charity", "celebration", name="campaigntype"),
-            nullable=False,
-        ),
+        sa.Column("campaign_type", campaigntype, nullable=False),
         sa.Column("emoji", sa.String(10), nullable=False, server_default="⚽"),
         sa.Column("description_template", sa.Text(), nullable=False, server_default=""),
         sa.Column("default_amount_per_person", sa.Numeric(12, 2), nullable=True),
         sa.Column(
             "default_visibility_mode",
-            sa.Enum("full_name", "first_name_only", "anonymous", name="visibilitymode"),
+            visibilitymode,
             nullable=False,
             server_default="full_name",
         ),

@@ -21,12 +21,15 @@ def upgrade() -> None:
     op.execute("CREATE TYPE frequency AS ENUM ('weekly','biweekly','monthly','quarterly','annual')")
     op.execute("CREATE TYPE instancestatus AS ENUM ('upcoming','active','completed','missed')")
 
+    frequency = postgresql.ENUM("weekly", "biweekly", "monthly", "quarterly", "annual", name="frequency", create_type=False)
+    instancestatus = postgresql.ENUM("upcoming", "active", "completed", "missed", name="instancestatus", create_type=False)
+
     op.create_table(
         "recurring_schedules",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("campaign_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False),
         sa.Column("org_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("orgs.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("frequency", sa.Enum("weekly", "biweekly", "monthly", "quarterly", "annual", name="frequency"), nullable=False),
+        sa.Column("frequency", frequency, nullable=False),
         sa.Column("day_of_month", sa.Integer(), nullable=True),
         sa.Column("day_of_week", sa.Integer(), nullable=True),
         sa.Column("start_date", sa.Date(), nullable=False),
@@ -47,7 +50,7 @@ def upgrade() -> None:
         sa.Column("schedule_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("recurring_schedules.id", ondelete="CASCADE"), nullable=False),
         sa.Column("campaign_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False),
         sa.Column("due_date", sa.Date(), nullable=False),
-        sa.Column("status", sa.Enum("upcoming", "active", "completed", "missed", name="instancestatus"), nullable=False, server_default="upcoming"),
+        sa.Column("status", instancestatus, nullable=False, server_default="upcoming"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
     op.create_index("ix_recurring_instances_schedule_id", "recurring_instances", ["schedule_id"])

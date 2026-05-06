@@ -346,6 +346,17 @@ export default function PublicCampaign() {
               <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
             )}
           </p>
+          {/* Local-currency conversion line (e.g. ~GMD 42,000) */}
+          {(campaign as any).payout_currency && (campaign as any).goal_amount_local && (
+            <p className="text-brand-200 text-xs mt-0.5">
+              ~{(campaign as any).payout_currency}{' '}
+              {Number((campaign as any).goal_amount_local).toLocaleString()} goal
+              {(campaign as any).total_raised_local && (
+                <> · {(campaign as any).payout_currency}{' '}
+                {Number((campaign as any).total_raised_local).toLocaleString()} raised</>
+              )}
+            </p>
+          )}
         </div>
 
         {/* Stat pills */}

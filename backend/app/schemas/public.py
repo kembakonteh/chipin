@@ -32,6 +32,11 @@ class PublicCampaignResponse(BaseModel):
     goal_amount: Decimal
     amount_per_person: Optional[Decimal]
     currency: str
+    collection_currency: str
+    payout_currency: Optional[str]
+    # Converted amounts shown in payout currency (e.g. GMD) — None if no payout_currency set
+    goal_amount_local: Optional[Decimal]
+    total_raised_local: Optional[Decimal]
     allow_anonymous_contributions: bool
     total_raised: Decimal
     contributor_count: int

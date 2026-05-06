@@ -5,7 +5,13 @@ from typing import Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.models.campaign import CampaignStatus, CampaignType, VisibilityMode
+from app.models.campaign import (
+    CollectionCurrency,
+    CampaignStatus,
+    CampaignType,
+    PayoutCurrency,
+    VisibilityMode,
+)
 from app.schemas.beneficiary import BeneficiaryResponse
 
 T = TypeVar("T")
@@ -27,6 +33,8 @@ class CampaignCreate(BaseModel):
     goal_amount: Decimal
     amount_per_person: Optional[Decimal] = None
     currency: str = "USD"
+    collection_currency: CollectionCurrency = CollectionCurrency.USD
+    payout_currency: Optional[PayoutCurrency] = None
     visibility_mode: VisibilityMode = VisibilityMode.full_name
     allow_anonymous_contributions: bool = True
     whatsapp_reminders_enabled: bool = True
@@ -50,6 +58,8 @@ class CampaignUpdate(BaseModel):
     allow_anonymous_contributions: Optional[bool] = None
     status: Optional[CampaignStatus] = None
     whatsapp_reminders_enabled: Optional[bool] = None
+    collection_currency: Optional[CollectionCurrency] = None
+    payout_currency: Optional[PayoutCurrency] = None
 
 
 class CampaignResponse(BaseModel):
@@ -64,6 +74,8 @@ class CampaignResponse(BaseModel):
     goal_amount: Decimal
     amount_per_person: Optional[Decimal]
     currency: str
+    collection_currency: CollectionCurrency
+    payout_currency: Optional[PayoutCurrency]
     visibility_mode: VisibilityMode
     allow_anonymous_contributions: bool
     status: CampaignStatus

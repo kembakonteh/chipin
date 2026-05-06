@@ -22,18 +22,14 @@ def upgrade() -> None:
     op.execute("CREATE TYPE orgtype AS ENUM ('sports','religious','community','professional','social')")
     op.execute("CREATE TYPE orgmemberrole AS ENUM ('admin','treasurer','member')")
 
+    orgtype = postgresql.ENUM("sports", "religious", "community", "professional", "social", name="orgtype", create_type=False)
+    orgmemberrole = postgresql.ENUM("admin", "treasurer", "member", name="orgmemberrole", create_type=False)
+
     # Expand orgs table
     op.add_column("orgs", sa.Column("slug", sa.String(255), nullable=True))
     op.add_column("orgs", sa.Column("description", sa.Text(), nullable=True))
     op.add_column("orgs", sa.Column("logo_url", sa.String(500), nullable=True))
-    op.add_column(
-        "orgs",
-        sa.Column(
-            "org_type",
-            sa.Enum("sports", "religious", "community", "professional", "social", name="orgtype"),
-            nullable=True,
-        ),
-    )
+    op.add_column("orgs", sa.Column("org_type", orgtype, nullable=True))
     op.add_column("orgs", sa.Column("whatsapp_group_name", sa.String(255), nullable=True))
     op.create_unique_constraint("uq_orgs_slug", "orgs", ["slug"])
     op.create_index("ix_orgs_slug", "orgs", ["slug"])
@@ -45,12 +41,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "org_members",
-        sa.Column(
-            "role",
-            sa.Enum("admin", "treasurer", "member", name="orgmemberrole"),
-            nullable=False,
-            server_default="member",
-        ),
+        sa.Column("role", orgmemberrole, nullable=False, server_default="member"),
     )
     op.add_column(
         "org_members",

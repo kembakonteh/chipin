@@ -8,7 +8,7 @@ services:
     volumes:
       - chipin_postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U chipin"]
       interval: 5s
@@ -41,12 +41,12 @@ services:
       REDIS_URL: redis://chipin-redis:6379/0
       SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
-      ALLOWED_ORIGINS: "https://chipin.kafotech.io"
+      ALLOWED_ORIGINS: "https://chipin.kafotech.io,http://89.167.108.80:5176"
       STRIPE_SECRET_KEY: ""
       STRIPE_WEBHOOK_SECRET: ""
       META_WHATSAPP_TOKEN: ""
       META_PHONE_NUMBER_ID: ""
-      FRONTEND_URL: "https://chipin.kafotech.io"
+      FRONTEND_URL: "http://89.167.108.80:5176"
     depends_on:
       chipin-db:
         condition: service_healthy
@@ -65,7 +65,7 @@ services:
     ports:
       - "5176:5173"
     environment:
-      VITE_API_URL: https://chipin.kafotech.io/api
+      VITE_API_URL: http://89.167.108.80:8003/api/v1
     depends_on:
       - chipin-backend
     networks:

@@ -14,6 +14,7 @@ import SusuListPage from './pages/SusuListPage'
 import SusuCreatePage from './pages/SusuCreatePage'
 import SusuDetail from './pages/SusuDetail'
 import PublicSusu from './pages/PublicSusu'
+import PayoutSettings from './pages/Settings/PayoutSettings'
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/susu" element={<Protected><SusuListPage /></Protected>} />
         <Route path="/susu/create" element={<Protected><SusuCreatePage /></Protected>} />
         <Route path="/susu/:slug" element={<Protected><SusuDetail /></Protected>} />
+        <Route path="/settings/payout" element={<Protected><PayoutSettings /></Protected>} />
         <Route path="/p/:slug" element={<PublicCampaign />} />
         <Route path="/o/:slug" element={<PublicOrgPage />} />
         <Route path="/s/:slug" element={<PublicSusu />} />

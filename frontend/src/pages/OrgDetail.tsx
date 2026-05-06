@@ -5,6 +5,7 @@ import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
 import type { Org, OrgMember, OrgMemberRole, OrgType } from '../types'
 import { fmt } from '../types'
+import Layout from '../components/Layout'
 
 function getData<T>(r: AxiosResponse<T>): T { return r.data }
 
@@ -464,10 +465,11 @@ export default function OrgDetail() {
   ]
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <Layout>
+    <div>
       <button
         onClick={() => navigate('/orgs')}
-        className="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-flex items-center gap-1"
+        className="text-sm text-gray-400 hover:text-white mb-4 inline-flex items-center gap-1"
       >
         ← Organizations
       </button>
@@ -514,5 +516,6 @@ export default function OrgDetail() {
       {tab === 'members' && <MembersTab orgSlug={slug!} />}
       {tab === 'settings' && <SettingsTab org={org} />}
     </div>
+    </Layout>
   )
 }

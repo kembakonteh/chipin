@@ -8,6 +8,7 @@ export default function Login() {
   const { isAuthenticated } = useAuth()
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const [devLink, setDevLink] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
@@ -17,7 +18,10 @@ export default function Login() {
     if (!email.trim()) { toast.error('Enter your email'); return }
     setLoading(true)
     try {
-      await api.post('/auth/send-link', { email: email.trim() })
+      const res = await api.post<{ message: string; dev_link?: string }>(
+        '/auth/send-link', { email: email.trim() }
+      )
+      setDevLink(res.data.dev_link ?? null)
       setSent(true)
     } catch {
       toast.error('Could not send magic link. Please try again.')
@@ -42,13 +46,29 @@ export default function Login() {
             <div className="text-center py-2">
               <span className="text-4xl block mb-4">📬</span>
               <h2 className="text-lg font-semibold text-white mb-2">Check your email</h2>
-              <p className="text-sm text-gray-400 mb-6">
+              <p className="text-sm text-gray-400 mb-4">
                 We sent a magic link to <span className="text-brand-300">{email}</span>.
                 Click it to sign in.
               </p>
+
+              {/* Dev fallback: show clickable link when SMTP isn't configured */}
+              {devLink && (
+                <div className="mb-4 rounded-lg border border-yellow-800 bg-yellow-900/20 p-3 text-left">
+                  <p className="text-xs text-yellow-400 font-semibold mb-2">
+                    Dev mode — SMTP not configured. Use this link:
+                  </p>
+                  <a
+                    href={devLink}
+                    className="block text-xs text-brand-300 break-all hover:underline"
+                  >
+                    {devLink}
+                  </a>
+                </div>
+              )}
+
               <button
                 type="button"
-                onClick={() => setSent(false)}
+                onClick={() => { setSent(false); setDevLink(null) }}
                 className="text-sm text-gray-500 hover:text-brand-300 transition-colors underline"
               >
                 Use a different email
