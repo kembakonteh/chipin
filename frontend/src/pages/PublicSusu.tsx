@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
@@ -97,6 +97,7 @@ function PayModal({
 export default function PublicSusu() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const justPaid = searchParams.get('paid') === '1'
   const [payingMember, setPayingMember] = useState<SusuMember | null>(null)
 
@@ -131,12 +132,21 @@ export default function PublicSusu() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-950/90 backdrop-blur sticky top-0 z-20">
-        <div className="mx-auto flex max-w-xl items-center gap-2.5 px-4 py-3">
-          <span className="text-xl">🌍</span>
-          <div className="leading-none">
-            <span className="block text-xs text-brand-400 font-medium">KafoTech</span>
-            <span className="block text-sm font-bold text-white">ChipIn · Susu</span>
+        <div className="mx-auto flex max-w-xl items-center justify-between gap-2.5 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🌍</span>
+            <div className="leading-none">
+              <span className="block text-xs text-brand-400 font-medium">KafoTech</span>
+              <span className="block text-sm font-bold text-white">ChipIn · Susu</span>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/susu/${slug}`)}
+            className="text-xs text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1"
+          >
+            ← Manage
+          </button>
         </div>
       </header>
 
