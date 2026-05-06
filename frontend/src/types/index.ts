@@ -153,6 +153,7 @@ export interface Contributor {
   paid_at: string | null
   added_by_organizer: boolean
   is_anonymous: boolean
+  payment_note: string | null
   created_at: string
   privacy_note: string | null
 }

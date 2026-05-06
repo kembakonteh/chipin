@@ -226,8 +226,32 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
         return
 
     # Update payment intent ID (confirmed from Stripe)
-    if session_obj.get("payment_intent"):
-        payment.stripe_payment_intent_id = session_obj["payment_intent"]
+    pi_id = session_obj.get("payment_intent")
+    if pi_id:
+        payment.stripe_payment_intent_id = pi_id
+
+    # Enforce debit-only policy — refund credit card payments immediately
+    if pi_id:
+        try:
+            pi = await asyncio.to_thread(
+                stripe.PaymentIntent.retrieve, pi_id, expand=["latest_charge"]
+            )
+            charge = pi.get("latest_charge") if isinstance(pi, dict) else getattr(pi, "latest_charge", None)
+            charge_obj = charge if isinstance(charge, dict) else (charge.to_dict() if charge else None)
+            if charge_obj:
+                card_funding = (
+                    charge_obj.get("payment_method_details", {})
+                    .get("card", {})
+                    .get("funding", "")
+                )
+                if card_funding == "credit":
+                    logger.warning("Refunding credit card payment %s — debit-only policy", charge_obj["id"])
+                    await asyncio.to_thread(stripe.Refund.create, charge=charge_obj["id"])
+                    payment.status = PaymentStatus.refunded
+                    await db.commit()
+                    return
+        except stripe.StripeError as exc:
+            logger.error("Could not verify card funding type for PI %s: %s", pi_id, exc)
 
     # Update amounts from session (source of truth)
     gross_cents = session_obj.get("amount_total", 0)

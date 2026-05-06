@@ -41,6 +41,7 @@ class Contributor(Base, UUIDMixin, TimestampMixin):
     added_by_organizer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # When true: shown as "Anonymous" on public board; organizer always sees real name
     is_anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    payment_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="contributors")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="contributor")

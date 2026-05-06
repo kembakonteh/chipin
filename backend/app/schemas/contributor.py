@@ -28,6 +28,7 @@ class ContributorUpdate(BaseModel):
 class MarkPaidRequest(BaseModel):
     paid_via: PaidVia
     is_anonymous: Optional[bool] = None
+    note: Optional[str] = None
 
 
 class ContributorResponse(BaseModel):
@@ -44,6 +45,7 @@ class ContributorResponse(BaseModel):
     paid_at: Optional[datetime]
     added_by_organizer: bool
     is_anonymous: bool
+    payment_note: Optional[str]
     created_at: datetime
 
     @computed_field  # type: ignore[prop-decorator]

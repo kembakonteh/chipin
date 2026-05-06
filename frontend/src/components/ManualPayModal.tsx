@@ -21,13 +21,14 @@ interface Props {
 export default function ManualPayModal({ contributor, campaignSlug, onClose }: Props) {
   const [paidVia, setPaidVia] = useState<PaidVia>('cash')
   const [isAnonymous, setIsAnonymous] = useState(contributor.is_anonymous)
+  const [note, setNote] = useState('')
   const qc = useQueryClient()
 
   const mutation = useMutation({
     mutationFn: () =>
       api.post(
         `/campaigns/${campaignSlug}/contributors/${contributor.id}/mark-paid`,
-        { paid_via: paidVia, is_anonymous: isAnonymous },
+        { paid_via: paidVia, is_anonymous: isAnonymous, note: note.trim() || null },
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contributors', campaignSlug] })
@@ -67,6 +68,25 @@ export default function ManualPayModal({ contributor, campaignSlug, onClose }: P
               <span>{o.label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Reference / confirmation number */}
+        <div className="mb-4">
+          <label className="block text-xs text-gray-400 mb-1">
+            Reference / confirmation number <span className="text-gray-600">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder={
+              paidVia === 'zelle'   ? 'e.g. Zelle confirmation #12345' :
+              paidVia === 'cashapp' ? 'e.g. CashApp $cashtag or transaction ID' :
+              'e.g. Envelope #3, cash received 6 May'
+            }
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+              text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+          />
         </div>
 
         {/* Anonymous toggle */}

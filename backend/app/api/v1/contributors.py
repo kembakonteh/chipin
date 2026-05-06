@@ -184,6 +184,8 @@ async def mark_paid(
     contributor.paid_via = body.paid_via
     if body.is_anonymous is not None:
         contributor.is_anonymous = body.is_anonymous
+    if body.note is not None:
+        contributor.payment_note = body.note.strip() or None
 
     await db.commit()
     await db.refresh(contributor)

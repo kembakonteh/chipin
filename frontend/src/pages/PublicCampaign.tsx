@@ -176,8 +176,8 @@ export default function PublicCampaign() {
   const remaining     = goalAmount != null ? Math.max(0, goalAmount - totalRaised) : null
   const amountPer     = campaign?.amount_per_person ? parseFloat(campaign.amount_per_person) : null
 
-  // Payment form
-  const [showForm, setShowForm] = useState(false)
+  // Payment flow
+  const [payMode, setPayMode] = useState<null | 'card' | 'manual'>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [amount, setAmount] = useState(campaign?.amount_per_person ?? '')
@@ -388,19 +388,50 @@ export default function PublicCampaign() {
           </div>
         )}
 
-        {isActive && !showForm && (
-          <button
-            type="button"
-            onClick={() => setShowForm(true)}
-            className="w-full rounded-2xl bg-brand-600 py-4 text-base font-bold text-white
-              hover:bg-brand-500 active:scale-[0.98] transition-all shadow-md shadow-brand-600/30"
-          >
-            Chip In{amountPer ? ` ${fmt(amountPer, campaign.currency)}` : ''}
-          </button>
+        {/* Step 1: Choose payment method */}
+        {isActive && payMode === null && (
+          <div className="space-y-3">
+            <p className="text-center text-sm font-medium text-gray-600 mb-1">
+              How would you like to pay?
+            </p>
+            <button
+              type="button"
+              onClick={() => setPayMode('card')}
+              className="w-full flex items-center gap-3 rounded-2xl border-2 border-brand-500
+                bg-brand-50 px-5 py-4 text-left hover:bg-brand-100 active:scale-[0.98]
+                transition-all"
+            >
+              <span className="text-2xl">💳</span>
+              <div>
+                <p className="font-semibold text-brand-700 text-sm">Pay by Debit Card</p>
+                <p className="text-xs text-brand-500 mt-0.5">Secure checkout via Stripe · debit cards only</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayMode('manual')}
+              className="w-full flex items-center gap-3 rounded-2xl border-2 border-gray-200
+                bg-gray-50 px-5 py-4 text-left hover:border-gray-300 hover:bg-gray-100
+                active:scale-[0.98] transition-all"
+            >
+              <span className="text-2xl">💸</span>
+              <div>
+                <p className="font-semibold text-gray-700 text-sm">Zelle / CashApp / Cash</p>
+                <p className="text-xs text-gray-500 mt-0.5">Transfer directly · organizer marks you as paid</p>
+              </div>
+            </button>
+          </div>
         )}
 
-        {isActive && showForm && (
+        {/* Step 2a: Card payment form */}
+        {isActive && payMode === 'card' && (
           <form onSubmit={handlePay} className="space-y-3">
+            <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200
+              px-3 py-2 mb-1">
+              <span className="text-amber-500 text-sm">⚠️</span>
+              <p className="text-xs text-amber-700 font-medium">Debit cards only — credit cards are not accepted.</p>
+            </div>
+
             <input
               required
               type="text"
@@ -449,9 +480,7 @@ export default function PublicCampaign() {
                     className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600
                       focus:ring-brand-500"
                   />
-                  <span className="text-sm text-gray-700">
-                    Keep my name private on the public board
-                  </span>
+                  <span className="text-sm text-gray-700">Keep my name private on the public board</span>
                 </label>
                 {isAnon && (
                   <p className="mt-2 ml-7 text-xs text-gray-500 leading-relaxed">
@@ -463,9 +492,7 @@ export default function PublicCampaign() {
               </div>
             )}
 
-            {payError && (
-              <p className="text-sm text-red-500 text-center">{payError}</p>
-            )}
+            {payError && <p className="text-sm text-red-500 text-center">{payError}</p>}
 
             <button
               type="submit"
@@ -474,22 +501,51 @@ export default function PublicCampaign() {
                 hover:bg-brand-500 active:scale-[0.98] disabled:opacity-60 transition-all
                 shadow-md shadow-brand-600/30"
             >
-              {paying ? 'Redirecting to Stripe…' : 'Pay by Card 💳'}
+              {paying ? 'Redirecting to Stripe…' : 'Pay by Debit Card 💳'}
             </button>
-
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Cancel
+            <button type="button" onClick={() => setPayMode(null)}
+              className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              ← Back
             </button>
           </form>
         )}
 
-        <p className="mt-3 text-center text-xs text-gray-400">
-          Secured by Stripe · 2.5% platform fee applies
-        </p>
+        {/* Step 2b: Zelle / CashApp instructions */}
+        {isActive && payMode === 'manual' && (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
+              <p className="text-sm font-semibold text-gray-800">How it works</p>
+              <ol className="space-y-2 text-sm text-gray-600">
+                <li className="flex gap-2">
+                  <span className="font-bold text-brand-600 shrink-0">1.</span>
+                  Send{amountPer ? ` ${fmt(amountPer, campaign.currency)}` : ' your contribution'} via
+                  Zelle, CashApp, or hand it to the organizer in cash.
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-bold text-brand-600 shrink-0">2.</span>
+                  Let your organizer know you've paid (message or tell them in person).
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-bold text-brand-600 shrink-0">3.</span>
+                  Your organizer will mark you as paid and your name will appear on this board.
+                </li>
+              </ol>
+            </div>
+            <p className="text-xs text-center text-gray-400">
+              No fee for Zelle / CashApp / Cash payments.
+            </p>
+            <button type="button" onClick={() => setPayMode(null)}
+              className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              ← Back
+            </button>
+          </div>
+        )}
+
+        {payMode !== 'card' && (
+          <p className="mt-3 text-center text-xs text-gray-400">
+            Card payments secured by Stripe · 2.5% platform fee applies
+          </p>
+        )}
       </div>
 
       {/* ── Board ── */}
