@@ -16,6 +16,7 @@ interface PublicContributor {
   amount: string
   paid: boolean
   paid_at: string | null
+  message: string | null
 }
 
 interface PublicBeneficiary {
@@ -181,6 +182,7 @@ export default function PublicCampaign() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [amount, setAmount] = useState(campaign?.amount_per_person ?? '')
+  const [message, setMessage] = useState('')
   const [isAnon, setIsAnon] = useState(false)
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState('')
@@ -208,6 +210,7 @@ export default function PublicCampaign() {
         contributor_email: email.trim(),
         amount: parsed,
         is_anonymous: isAnon,
+        message: message.trim() || null,
       })
       window.location.href = res.data.checkout_url
     } catch (err: unknown) {
@@ -492,6 +495,27 @@ export default function PublicCampaign() {
               </div>
             )}
 
+            {/* Optional message */}
+            <div>
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                maxLength={300}
+                rows={2}
+                placeholder={
+                  campaign.campaign_type === 'memorial'
+                    ? 'Leave a message of condolence (optional) — e.g. "May he rest in peace. Our thoughts are with the family."'
+                    : 'Leave a message (optional)'
+                }
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3
+                  text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
+                  focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
+              />
+              {message.length > 0 && (
+                <p className="text-right text-xs text-gray-400 mt-0.5">{message.length}/300</p>
+              )}
+            </div>
+
             {payError && <p className="text-sm text-red-500 text-center">{payError}</p>}
 
             <button
@@ -692,13 +716,20 @@ function BoardRow({
         </div>
       )}
 
-      {/* Name + time */}
+      {/* Name + time + message */}
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium truncate ${c.paid ? 'text-gray-800' : 'text-gray-400'}`}>
           {c.display_name}
         </p>
         {c.paid && c.paid_at && (
           <p className="text-xs text-gray-400 mt-0.5">{timeAgo(c.paid_at)}</p>
+        )}
+        {c.paid && c.message && (
+          <p className={`text-xs mt-1 leading-relaxed italic ${
+            campaignType === 'memorial' ? 'text-slate-500' : 'text-gray-500'
+          }`}>
+            "{c.message}"
+          </p>
         )}
       </div>
 

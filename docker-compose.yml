@@ -42,8 +42,8 @@ services:
       SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
       ALLOWED_ORIGINS: "https://chipin.kafotech.io,http://89.167.108.80:5176"
-      STRIPE_SECRET_KEY: ""
-      STRIPE_WEBHOOK_SECRET: ""
+      STRIPE_SECRET_KEY: "sk_test_REPLACE_WITH_YOUR_KEY"
+      STRIPE_WEBHOOK_SECRET: "whsec_REPLACE_WITH_YOUR_KEY"
       META_WHATSAPP_TOKEN: ""
       META_PHONE_NUMBER_ID: ""
       FRONTEND_URL: "http://89.167.108.80:5176"

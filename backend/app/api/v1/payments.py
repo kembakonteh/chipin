@@ -93,6 +93,8 @@ async def initiate_payment(
     contributor = existing.scalar_one_or_none()
     if contributor:
         contributor.is_anonymous = is_anonymous
+        if body.message is not None:
+            contributor.message = body.message.strip() or None
     else:
         contributor = Contributor(
             campaign_id=campaign.id,
@@ -101,6 +103,7 @@ async def initiate_payment(
             amount=gross_amount,
             is_anonymous=is_anonymous,
             added_by_organizer=False,
+            message=body.message.strip() if body.message else None,
         )
         db.add(contributor)
         await db.flush()  # get contributor.id before Stripe call

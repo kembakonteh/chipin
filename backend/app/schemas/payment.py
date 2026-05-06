@@ -13,6 +13,7 @@ class InitiatePaymentRequest(BaseModel):
     contributor_email: EmailStr
     amount: Optional[Decimal] = None
     is_anonymous: Optional[bool] = None  # None = use campaign/type defaults
+    message: Optional[str] = None
 
 
 class CheckoutResponse(BaseModel):

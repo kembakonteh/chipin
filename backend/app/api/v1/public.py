@@ -129,6 +129,7 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
             amount=c.amount,
             paid=c.paid,
             paid_at=c.paid_at,
+            message=c.message,
         )
         for c in contributors
     ]
