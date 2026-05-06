@@ -413,6 +413,7 @@ function SettingsTab({ org }: { org: Org }) {
           rows={3}
           value={description}
           onChange={e => setDescription(e.target.value)}
+          placeholder="e.g. Gambian community football club based in Seattle. We collect dues every season for kits, referee fees, and end-of-season events."
         />
       </div>
 
