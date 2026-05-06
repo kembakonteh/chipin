@@ -1,14 +1,27 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+
+const NAV_ITEMS = [
+  { label: 'Campaigns',      to: '/dashboard',       match: ['/dashboard', '/campaigns'] },
+  { label: 'Organizations',  to: '/orgs',             match: ['/orgs'] },
+  { label: 'Recurring',      to: '/recurring',        match: ['/recurring'] },
+  { label: 'Susu',           to: '/susu',             match: ['/susu'] },
+  { label: 'Payouts',        to: '/settings/payout',  match: ['/settings'] },
+]
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { logout } = useAuth()
   const nav = useNavigate()
+  const { pathname } = useLocation()
 
   function handleLogout() {
     logout()
     nav('/login')
+  }
+
+  function isActive(match: string[]) {
+    return match.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'))
   }
 
   return (
@@ -26,36 +39,19 @@ export default function Layout({ children }: { children: ReactNode }) {
             </div>
           </Link>
           <nav className="flex items-center gap-1">
-            <Link
-              to="/dashboard"
-              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Campaigns
-            </Link>
-            <Link
-              to="/orgs"
-              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Organizations
-            </Link>
-            <Link
-              to="/recurring"
-              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Recurring
-            </Link>
-            <Link
-              to="/susu"
-              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Susu
-            </Link>
-            <Link
-              to="/settings/payout"
-              className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Payouts
-            </Link>
+            {NAV_ITEMS.map(item => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                  isActive(item.match)
+                    ? 'bg-brand-700/40 text-brand-200 font-medium'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
             <button
               type="button"
               onClick={handleLogout}
