@@ -40,6 +40,7 @@ interface Props {
 
 export default function SettingsTab({ campaign }: Props) {
   const [form, setForm] = useState<Form>(toForm(campaign))
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const qc = useQueryClient()
   const nav = useNavigate()
 
@@ -86,6 +87,16 @@ export default function SettingsTab({ campaign }: Props) {
       else toast.success(`Campaign ${updated.status}`)
     },
     onError: () => toast.error('Failed to update status'),
+  })
+
+  const deletePermanentMutation = useMutation({
+    mutationFn: () => api.delete(`/campaigns/${campaign.slug}/permanent`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] })
+      toast.success('Campaign permanently deleted')
+      nav('/dashboard', { replace: true })
+    },
+    onError: () => toast.error('Failed to delete campaign'),
   })
 
   function handleSubmit(e: React.FormEvent) {
@@ -351,6 +362,53 @@ export default function SettingsTab({ campaign }: Props) {
             />
           )}
         </div>
+      </div>
+
+      {/* Danger zone */}
+      <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-red-400">Danger Zone</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Permanently deletes this campaign and all its data — contributors, payment history, and any beneficiary profile.
+            This cannot be undone.
+          </p>
+        </div>
+
+        {!confirmDelete ? (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="rounded-lg border border-red-800 px-4 py-2 text-sm font-medium
+              text-red-400 hover:bg-red-900/30 transition-colors"
+          >
+            Delete Campaign Permanently
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-red-300 font-medium">
+              Are you sure? All contributors, payments, and history will be gone forever.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => deletePermanentMutation.mutate()}
+                disabled={deletePermanentMutation.isPending}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white
+                  hover:bg-red-600 disabled:opacity-60 transition-colors"
+              >
+                {deletePermanentMutation.isPending ? 'Deleting…' : 'Yes, delete permanently'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400
+                  hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </form>
   )

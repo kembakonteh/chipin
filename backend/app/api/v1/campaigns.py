@@ -214,6 +214,22 @@ async def delete_campaign(
     await db.commit()
 
 
+@router.delete("/{slug}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign_permanent(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hard delete — removes campaign and all related data permanently."""
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    await db.execute(
+        select(Campaign).where(Campaign.id == campaign.id)  # confirm ownership already done above
+    )
+    from sqlalchemy import delete as sa_delete
+    await db.execute(sa_delete(Campaign).where(Campaign.id == campaign.id))
+    await db.commit()
+
+
 # --- Org member sync ---
 
 @router.get("/{slug}/unsynced-members", response_model=list[OrgMemberResponse])
