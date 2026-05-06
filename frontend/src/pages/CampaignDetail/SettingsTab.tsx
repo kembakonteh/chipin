@@ -20,6 +20,8 @@ interface Form {
   allow_anonymous_contributions: boolean
   whatsapp_reminders_enabled: boolean
   due_date: string
+  zelle_info: string
+  cashapp_handle: string
   org_id: string | null
 }
 
@@ -37,6 +39,8 @@ function toForm(c: Campaign): Form {
     allow_anonymous_contributions: c.allow_anonymous_contributions,
     whatsapp_reminders_enabled: c.whatsapp_reminders_enabled,
     due_date: c.due_date ?? '',
+    zelle_info: c.zelle_info ?? '',
+    cashapp_handle: c.cashapp_handle ?? '',
     org_id: c.org_id ?? null,
   }
 }
@@ -76,6 +80,8 @@ export default function SettingsTab({ campaign }: Props) {
         allow_anonymous_contributions: form.allow_anonymous_contributions,
         whatsapp_reminders_enabled: form.whatsapp_reminders_enabled,
         due_date: form.due_date || null,
+        zelle_info: form.zelle_info.trim() || null,
+        cashapp_handle: form.cashapp_handle.trim() || null,
         org_id: form.org_id || null,
       }).then(r => r.data),
     onSuccess: () => {
@@ -190,6 +196,42 @@ export default function SettingsTab({ campaign }: Props) {
           <p className="text-xs text-gray-600 mt-1">
             Reminders auto-send at 7, 3, and 1 day(s) before. Campaign auto-completes when passed.
           </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Zelle info <span className="text-gray-600">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={form.zelle_info}
+              onChange={(e) => set('zelle_info', e.target.value)}
+              placeholder="e.g. john@email.com or +1 555-0100"
+              maxLength={255}
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              CashApp handle <span className="text-gray-600">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={form.cashapp_handle}
+              onChange={(e) => set('cashapp_handle', e.target.value)}
+              placeholder="e.g. $JohnDoe"
+              maxLength={255}
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+            />
+          </div>
+          {(form.zelle_info || form.cashapp_handle) && (
+            <p className="text-xs text-brand-400">
+              Contributors who choose Zelle / CashApp will see this info on the public page.
+            </p>
+          )}
         </div>
 
         <div>

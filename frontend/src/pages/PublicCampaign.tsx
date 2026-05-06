@@ -43,6 +43,8 @@ interface PublicCampaign {
   paid_count: number
   contributors: PublicContributor[]
   status: string
+  zelle_info: string | null
+  cashapp_handle: string | null
   beneficiary: PublicBeneficiary | null
 }
 
@@ -181,13 +183,16 @@ export default function PublicCampaign() {
 
   // Payment flow
   const [payMode, setPayMode] = useState<null | 'card' | 'manual'>(null)
+  const [manualMethod, setManualMethod] = useState<null | 'zelle' | 'cashapp'>(null)
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [amount, setAmount] = useState(campaign?.amount_per_person ?? '')
   const [message, setMessage] = useState('')
   const [isAnon, setIsAnon] = useState(false)
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState('')
+  const [manualSent, setManualSent] = useState(false)
 
   useEffect(() => {
     if (!campaign) return
@@ -575,34 +580,153 @@ export default function PublicCampaign() {
           </form>
         )}
 
-        {/* Step 2b: Zelle / CashApp instructions */}
-        {isActive && payMode === 'manual' && (
+        {/* Step 2b: Zelle / CashApp */}
+        {isActive && payMode === 'manual' && !manualSent && (
           <div className="space-y-4">
-            <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-800">How it works</p>
-              <ol className="space-y-2 text-sm text-gray-600">
-                <li className="flex gap-2">
-                  <span className="font-bold text-brand-600 shrink-0">1.</span>
-                  Send{amountPer ? ` ${fmt(amountPer, campaign.currency)}` : ' your contribution'} via
-                  Zelle, CashApp, or hand it to the organizer in cash.
-                </li>
-                <li className="flex gap-2">
-                  <span className="font-bold text-brand-600 shrink-0">2.</span>
-                  Let your organizer know you've paid (message or tell them in person).
-                </li>
-                <li className="flex gap-2">
-                  <span className="font-bold text-brand-600 shrink-0">3.</span>
-                  Your organizer will mark you as paid and your name will appear on this board.
-                </li>
-              </ol>
-            </div>
-            <p className="text-xs text-center text-gray-400">
-              No fee for Zelle / CashApp / Cash payments.
+            {/* Method picker */}
+            {manualMethod === null && (
+              <div className="space-y-3">
+                <p className="text-center text-sm font-medium text-gray-600 mb-1">
+                  Which method will you use?
+                </p>
+                {campaign.zelle_info && (
+                  <button
+                    type="button"
+                    onClick={() => setManualMethod('zelle')}
+                    className="w-full flex items-center gap-3 rounded-2xl border-2 border-blue-200
+                      bg-blue-50 px-5 py-4 text-left hover:bg-blue-100 active:scale-[0.98] transition-all"
+                  >
+                    <span className="text-2xl">💜</span>
+                    <div>
+                      <p className="font-semibold text-blue-700 text-sm">Zelle</p>
+                      <p className="text-xs text-blue-500 mt-0.5">Send to: {campaign.zelle_info}</p>
+                    </div>
+                  </button>
+                )}
+                {campaign.cashapp_handle && (
+                  <button
+                    type="button"
+                    onClick={() => setManualMethod('cashapp')}
+                    className="w-full flex items-center gap-3 rounded-2xl border-2 border-green-200
+                      bg-green-50 px-5 py-4 text-left hover:bg-green-100 active:scale-[0.98] transition-all"
+                  >
+                    <span className="text-2xl">💵</span>
+                    <div>
+                      <p className="font-semibold text-green-700 text-sm">CashApp</p>
+                      <p className="text-xs text-green-600 mt-0.5">Send to: {campaign.cashapp_handle}</p>
+                    </div>
+                  </button>
+                )}
+                {!campaign.zelle_info && !campaign.cashapp_handle && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-2">
+                    <p className="text-sm font-semibold text-gray-800">Pay directly</p>
+                    <p className="text-sm text-gray-600">
+                      Send your payment via Zelle, CashApp, or cash to the organizer, then let them know so they can mark you as paid.
+                    </p>
+                  </div>
+                )}
+                <button type="button" onClick={() => setPayMode(null)}
+                  className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                  ← Back
+                </button>
+              </div>
+            )}
+
+            {/* Self-report form */}
+            {manualMethod !== null && (
+              <form
+                className="space-y-3"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (!name.trim() || !phone.trim()) return
+                  const parsed = parseFloat(amount)
+                  if (!amount || isNaN(parsed) || parsed <= 0) {
+                    setPayError('Enter a valid amount.')
+                    return
+                  }
+                  setPayError('')
+                  setPaying(true)
+                  try {
+                    await http.post(`/p/${slug}/manual-pay`, {
+                      name: name.trim(),
+                      phone: phone.trim(),
+                      email: email.trim() || null,
+                      amount: parsed,
+                      method: manualMethod,
+                      is_anonymous: isAnon,
+                    })
+                    setManualSent(true)
+                  } catch (err: unknown) {
+                    const msg = axios.isAxiosError(err)
+                      ? (err.response?.data as { detail?: string })?.detail ?? 'Could not submit.'
+                      : 'Could not submit.'
+                    setPayError(msg)
+                  } finally {
+                    setPaying(false)
+                  }
+                }}
+              >
+                <div className={`rounded-xl p-3 text-sm ${manualMethod === 'zelle'
+                  ? 'bg-blue-50 border border-blue-200 text-blue-700'
+                  : 'bg-green-50 border border-green-200 text-green-700'}`}>
+                  <p className="font-semibold mb-1">
+                    {manualMethod === 'zelle' ? '💜 Zelle' : '💵 CashApp'}
+                  </p>
+                  <p className="text-xs">
+                    Send {amountPer ? fmt(amountPer, campaign.currency) : 'your amount'} to{' '}
+                    <span className="font-bold">
+                      {manualMethod === 'zelle' ? campaign.zelle_info : campaign.cashapp_handle}
+                    </span>
+                    , then fill out your details below so the organizer knows to confirm you.
+                  </p>
+                </div>
+
+                <input required type="text" placeholder="Your full name *" value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3
+                    text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
+                    focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                <input required type="tel" placeholder="Your phone number *" value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3
+                    text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
+                    focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
+                    {campaign.currency === 'USD' ? '$' : campaign.currency}
+                  </span>
+                  <input required type="number" min="1" step="0.01" value={amount}
+                    onChange={e => setAmount(e.target.value)} placeholder="Amount"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-8 pr-4 py-3
+                      text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
+                      focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                </div>
+
+                {payError && <p className="text-sm text-red-500 text-center">{payError}</p>}
+
+                <button type="submit" disabled={paying}
+                  className="w-full rounded-2xl bg-brand-600 py-4 text-base font-bold text-white
+                    hover:bg-brand-500 active:scale-[0.98] disabled:opacity-60 transition-all
+                    shadow-md shadow-brand-600/30">
+                  {paying ? 'Submitting…' : "I've sent the payment ✓"}
+                </button>
+                <button type="button" onClick={() => setManualMethod(null)}
+                  className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                  ← Back
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Manual pay success */}
+        {isActive && payMode === 'manual' && manualSent && (
+          <div className="text-center space-y-3 py-4">
+            <span className="text-4xl block">🎉</span>
+            <p className="font-semibold text-gray-800">Thanks, {name}!</p>
+            <p className="text-sm text-gray-500">
+              We've notified the organizer. Once they confirm your payment, your name will appear on the board.
             </p>
-            <button type="button" onClick={() => setPayMode(null)}
-              className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
-              ← Back
-            </button>
           </div>
         )}
 

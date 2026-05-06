@@ -102,6 +102,8 @@ export interface Campaign {
   status: CampaignStatus
   whatsapp_reminders_enabled: boolean
   due_date: string | null
+  zelle_info: string | null
+  cashapp_handle: string | null
   platform_fee_pct: string
   org_id: string | null
   created_at: string

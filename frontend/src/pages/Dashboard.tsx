@@ -42,7 +42,7 @@ export default function Dashboard() {
 
       {/* Campaign grid */}
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="campaign-grid">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-36 rounded-xl bg-gray-900 border border-gray-800 animate-pulse" />
           ))}
@@ -66,7 +66,7 @@ export default function Dashboard() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="campaign-grid">
           {campaigns.map((c) => (
             <CampaignCard key={c.id} campaign={c} />
           ))}

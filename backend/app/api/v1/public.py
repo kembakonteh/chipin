@@ -28,6 +28,7 @@ from app.schemas.contributor import (
 )
 from app.schemas.public import (
     CampaignStatsResponse,
+    ManualPayRequest,
     PublicCampaignResponse,
     PublicContributorItem,
 )
@@ -165,6 +166,8 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         paid_count=paid_count,
         contributors=public_contributors,
         status=campaign.status,
+        zelle_info=campaign.zelle_info,
+        cashapp_handle=campaign.cashapp_handle,
         beneficiary=campaign.beneficiary,
     )
 
@@ -358,6 +361,77 @@ async def join_campaign(
     return JoinCampaignResponse(
         contributor_id=contributor.id,
         message="You have been added!",
+    )
+
+
+@router.post("/p/{slug}/manual-pay", response_model=JoinCampaignResponse, status_code=status.HTTP_201_CREATED)
+async def manual_pay(
+    slug: str,
+    body: ManualPayRequest,
+    db: AsyncSession = Depends(get_db),
+    arq=Depends(get_arq),
+):
+    """Contributor self-reports a Zelle or CashApp payment. Organizer confirms in dashboard."""
+    from app.models.contributor import PaidVia
+
+    result = await db.execute(select(Campaign).where(Campaign.slug == slug))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    if campaign.status != CampaignStatus.active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Campaign is not accepting contributions.")
+
+    if body.method == "zelle" and not campaign.zelle_info:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zelle is not configured for this campaign.")
+    if body.method == "cashapp" and not campaign.cashapp_handle:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CashApp is not configured for this campaign.")
+
+    try:
+        paid_via = PaidVia(body.method)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payment method.")
+
+    dup_result = await db.execute(
+        select(Contributor).where(
+            Contributor.campaign_id == campaign.id,
+            Contributor.phone == body.phone,
+        )
+    )
+    if dup_result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You are already on this campaign.")
+
+    contributor = Contributor(
+        campaign_id=campaign.id,
+        name=body.name,
+        phone=body.phone,
+        email=body.email,
+        amount=body.amount,
+        paid=False,
+        paid_via=paid_via,
+        added_by_organizer=False,
+        is_anonymous=body.is_anonymous,
+    )
+    db.add(contributor)
+    await db.commit()
+    await db.refresh(contributor)
+
+    owner_result = await db.execute(select(User).where(User.id == campaign.owner_id))
+    owner = owner_result.scalar_one_or_none()
+    if owner and owner.phone and campaign.whatsapp_reminders_enabled:
+        method_label = "Zelle" if body.method == "zelle" else "CashApp"
+        await arq.enqueue_job(
+            "notify_organizer_whatsapp",
+            organizer_phone=owner.phone,
+            message=(
+                f"{body.name} says they sent {campaign.currency} {body.amount:.2f} "
+                f"via {method_label} to '{campaign.title}'. Confirm in your dashboard."
+            ),
+        )
+
+    return JoinCampaignResponse(
+        contributor_id=contributor.id,
+        message="Thanks! The organizer will confirm your payment shortly.",
     )
 
 

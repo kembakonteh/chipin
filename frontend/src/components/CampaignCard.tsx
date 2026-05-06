@@ -48,6 +48,7 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
       tabIndex={0}
       onClick={() => nav(`/dashboard/${campaign.slug}`)}
       onKeyDown={(e) => e.key === 'Enter' && nav(`/dashboard/${campaign.slug}`)}
+      style={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}
       className="group cursor-pointer rounded-xl border border-gray-700 bg-gray-900 p-5
         hover:border-brand-600 hover:bg-gray-800/70 transition-colors focus:outline-none
         focus:ring-2 focus:ring-brand-500"

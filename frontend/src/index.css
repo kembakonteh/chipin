@@ -1,3 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Global: prevent any child from causing full-page horizontal scroll ── */
+html, body, #root {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* ── Nav scroll container — hide the scrollbar ── */
+.nav-scroll::-webkit-scrollbar { display: none; }
+.nav-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ── Nav label visibility ── */
+.nav-label-full  { display: inline; }
+.nav-label-short { display: none; }
+
+@media (max-width: 479px) {
+  .nav-label-full  { display: none; }
+  .nav-label-short { display: inline; }
+}
+
+/* ── Campaign card grid ── */
+.campaign-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .campaign-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

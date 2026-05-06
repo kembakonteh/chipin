@@ -40,6 +40,8 @@ class CampaignCreate(BaseModel):
     allow_anonymous_contributions: bool = True
     whatsapp_reminders_enabled: bool = True
     due_date: Optional[date] = None
+    zelle_info: Optional[str] = None
+    cashapp_handle: Optional[str] = None
     template_id: Optional[uuid.UUID] = None
     org_id: Optional[uuid.UUID] = None
 
@@ -62,6 +64,8 @@ class CampaignUpdate(BaseModel):
     status: Optional[CampaignStatus] = None
     whatsapp_reminders_enabled: Optional[bool] = None
     due_date: Optional[date] = None
+    zelle_info: Optional[str] = None
+    cashapp_handle: Optional[str] = None
     collection_currency: Optional[CollectionCurrency] = None
     payout_currency: Optional[PayoutCurrency] = None
     org_id: Optional[uuid.UUID] = None
@@ -87,6 +91,8 @@ class CampaignResponse(BaseModel):
     status: CampaignStatus
     whatsapp_reminders_enabled: bool
     due_date: Optional[date]
+    zelle_info: Optional[str]
+    cashapp_handle: Optional[str]
     platform_fee_pct: Decimal
     org_id: Optional[uuid.UUID]
     created_at: datetime
