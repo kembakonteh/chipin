@@ -11,9 +11,12 @@ from datetime import date, timedelta
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
-from app.models.campaign import Campaign, CampaignStatus
+from app.models.campaign import Campaign, CampaignStatus, CampaignType
 from app.models.contributor import Contributor
 from app.models.user import User
+
+# Reminder blasts are inappropriate for compassion-driven campaigns
+_NO_REMINDER_TYPES = {CampaignType.memorial, CampaignType.charity}
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +85,11 @@ async def process_campaign_deadlines(ctx: dict) -> None:
             continue
 
         # ── Escalating reminders ─────────────────────────────────────────
+        # Skip reminder blasts for memorial and charity campaigns —
+        # people contribute out of compassion, not obligation.
+        if campaign.campaign_type in _NO_REMINDER_TYPES:
+            continue
+
         if days_left not in _ESCALATION_DAYS:
             continue
 
