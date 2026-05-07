@@ -37,15 +37,10 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     ALLOWED_ORIGINS: str = "http://localhost:5173"
 
-    # Email (SMTP via fastapi-mail)
-    MAIL_USERNAME: str = ""
-    MAIL_PASSWORD: str = ""
+    # Email (Resend)
+    RESEND_API_KEY: str = ""
     MAIL_FROM: str = "noreply@chipin.kafotech.io"
     MAIL_FROM_NAME: str = "ChipIn"
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = "smtp.gmail.com"
-    MAIL_STARTTLS: bool = True
-    MAIL_SSL_TLS: bool = False
 
     @property
     def origins(self) -> List[str]:
