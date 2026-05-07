@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATES = [
     {
-        "name": "Soccer Season Dues",
+        "name": "Sports & Team Dues",
         "campaign_type": CampaignType.general,
         "emoji": "⚽",
         "description_template": "Contributions for {season} season bibs and equipment.",
         "default_amount_per_person": Decimal("30.00"),
         "default_visibility_mode": VisibilityMode.full_name,
         "default_anonymous": False,
-        "whatsapp_share_text_template": "Hey {name}, chip in for {season} soccer season! ⚽ {url}",
+        "whatsapp_share_text_template": "Hey {name}, chip in for {team_name} {season} season! 🏆 {url}",
         "sort_order": 1,
         "is_active": True,
     },
