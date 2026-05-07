@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { setTokens as apiSetTokens, clearTokens as apiClearTokens } from '../lib/api'
+import { setTokens as apiSetTokens, clearTokens as apiClearTokens, hasTokens } from '../lib/api'
 import type { UserFeatures } from '../types'
 
 interface AuthCtx {
@@ -14,7 +14,7 @@ interface AuthCtx {
 const Ctx = createContext<AuthCtx | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(hasTokens)
   const [features, setFeaturesState] = useState<UserFeatures | null>(null)
 
   const login = useCallback((access: string, refresh: string) => {
