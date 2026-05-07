@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const result = await generateSW({
-  swDest: resolve(__dirname, 'dist/sw.js'),
+  swDest: resolve(__dirname, 'dist/sw.js'), // also copied to public/sw.js by vite from public/
   globDirectory: resolve(__dirname, 'dist'),
   globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
   skipWaiting: true,
