@@ -40,6 +40,8 @@ interface PublicCampaign {
   paid_count: number
   contributors: PublicContributor[]
   status: string
+  zelle_info: string | null
+  cashapp_handle: string | null
   beneficiary: PublicBeneficiary | null
 }
 
@@ -124,7 +126,7 @@ export default function PublicCampaign() {
   // Animated progress: start at 0 then transition to real value
   const realProgress = live
     ? live.progress_pct
-    : campaign
+    : campaign && parseFloat(campaign.goal_amount) > 0
       ? (parseFloat(campaign.total_raised) / parseFloat(campaign.goal_amount)) * 100
       : 0
   const [animProgress, setAnimProgress] = useState(0)
@@ -176,7 +178,7 @@ export default function PublicCampaign() {
   const remaining     = Math.max(0, goalAmount - totalRaised)
   const amountPer     = campaign?.amount_per_person ? parseFloat(campaign.amount_per_person) : null
 
-  // Payment form
+  // Card payment form
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -184,6 +186,17 @@ export default function PublicCampaign() {
   const [isAnon, setIsAnon] = useState(false)
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState('')
+
+  // Manual payment (Zelle / CashApp)
+  const [manualMethod, setManualMethod] = useState<'zelle' | 'cashapp' | null>(null)
+  const [manualName, setManualName] = useState('')
+  const [manualPhone, setManualPhone] = useState('')
+  const [manualEmail, setManualEmail] = useState('')
+  const [manualAmount, setManualAmount] = useState(campaign?.amount_per_person ?? '')
+  const [manualAnon, setManualAnon] = useState(false)
+  const [manualSubmitting, setManualSubmitting] = useState(false)
+  const [manualError, setManualError] = useState('')
+  const [manualDone, setManualDone] = useState(false)
 
   useEffect(() => {
     if (!campaign) return
@@ -217,6 +230,35 @@ export default function PublicCampaign() {
           : 'Payment failed.'
       setPayError(msg)
       setPaying(false)
+    }
+  }
+
+  async function handleManualPay(e: React.FormEvent) {
+    e.preventDefault()
+    if (!campaign || !manualMethod) return
+    if (!manualName.trim() || !manualPhone.trim()) { setManualError('Name and phone are required.'); return }
+    const parsed = parseFloat(manualAmount)
+    if (!manualAmount || isNaN(parsed) || parsed <= 0) { setManualError('Enter a valid amount.'); return }
+    setManualError('')
+    setManualSubmitting(true)
+    try {
+      await http.post(`/p/${slug}/manual-pay`, {
+        name: manualName.trim(),
+        phone: manualPhone.trim(),
+        email: manualEmail.trim() || null,
+        amount: parsed,
+        method: manualMethod,
+        is_anonymous: manualAnon,
+      })
+      setManualDone(true)
+    } catch (err: unknown) {
+      const msg =
+        axios.isAxiosError(err)
+          ? (err.response?.data as { detail?: string })?.detail ?? 'Submission failed.'
+          : 'Submission failed.'
+      setManualError(msg)
+    } finally {
+      setManualSubmitting(false)
     }
   }
 
@@ -331,19 +373,28 @@ export default function PublicCampaign() {
         {/* Progress ring + raised */}
         <div className="flex flex-col items-center mb-6">
           <ProgressRing
-            percent={animProgress}
-            size={160}
-            strokeWidth={14}
+            percent={goalAmount > 0 ? animProgress : 100}
+            size={140}
+            strokeWidth={13}
             color="white"
             trackColor="rgba(255,255,255,0.2)"
+            openGoal={goalAmount === 0}
           />
           <p className="mt-4 text-4xl font-bold tabular-nums">
             {fmt(totalRaised, campaign.currency)}
           </p>
-          <p className="text-brand-100 text-sm mt-1">
-            of {fmt(goalAmount, campaign.currency)} goal
-            {amountPer && (
-              <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
+          <p className="text-brand-100 text-sm mt-1 text-center">
+            {goalAmount > 0 ? (
+              <>
+                of {fmt(goalAmount, campaign.currency)} goal
+                {amountPer && (
+                  <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
+                )}
+              </>
+            ) : (
+              <>raised so far{amountPer && (
+                <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
+              )}</>
             )}
           </p>
         </div>
@@ -352,7 +403,7 @@ export default function PublicCampaign() {
         <div className="flex justify-center gap-2 flex-wrap">
           <Pill label="Paid" value={String(paidCount)} />
           <Pill label="Pending" value={String(pendingCount)} />
-          <Pill label="Remaining" value={fmt(remaining, campaign.currency)} />
+          {goalAmount > 0 && <Pill label="Remaining" value={fmt(remaining, campaign.currency)} />}
         </div>
       </div>
 
@@ -475,6 +526,149 @@ export default function PublicCampaign() {
           Secured by Stripe · 2.5% platform fee applies
         </p>
       </div>
+
+      {/* ── Manual payment (Zelle / CashApp) ── */}
+      {isActive && (campaign.zelle_info || campaign.cashapp_handle) && (
+        <div className="px-4 pb-4 bg-white border-b border-gray-100">
+          {!manualMethod && !manualDone && (
+            <div className="space-y-2">
+              {campaign.zelle_info && (
+                <button
+                  type="button"
+                  onClick={() => { setManualMethod('zelle'); setManualAmount(campaign.amount_per_person ?? '') }}
+                  className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 text-sm font-semibold
+                    text-gray-700 hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center
+                    justify-center gap-2"
+                >
+                  <span className="text-lg">💜</span> Pay via Zelle
+                </button>
+              )}
+              {campaign.cashapp_handle && (
+                <button
+                  type="button"
+                  onClick={() => { setManualMethod('cashapp'); setManualAmount(campaign.amount_per_person ?? '') }}
+                  className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 text-sm font-semibold
+                    text-gray-700 hover:bg-gray-50 active:scale-[0.98] transition-all flex items-center
+                    justify-center gap-2"
+                >
+                  <span className="text-lg">💚</span> Pay via CashApp
+                </button>
+              )}
+            </div>
+          )}
+
+          {manualMethod && !manualDone && (
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              {/* Instructions */}
+              <div className="rounded-xl bg-white border border-gray-200 p-3 text-center">
+                {manualMethod === 'zelle' ? (
+                  <>
+                    <p className="text-xs text-gray-500 mb-1">Send your payment to this Zelle address:</p>
+                    <p className="font-bold text-gray-900 text-base select-all">{campaign.zelle_info}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mb-1">Send your payment to this CashApp:</p>
+                    <p className="font-bold text-gray-900 text-base select-all">{campaign.cashapp_handle}</p>
+                  </>
+                )}
+                <p className="text-xs text-gray-400 mt-2">
+                  Include &ldquo;{campaign.title}&rdquo; in the memo so the organizer can identify you.
+                </p>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center font-medium">
+                Once sent, fill in your details below so we can confirm your spot:
+              </p>
+
+              <form onSubmit={handleManualPay} className="space-y-2">
+                <input
+                  required
+                  type="text"
+                  placeholder="Your full name *"
+                  value={manualName}
+                  onChange={e => setManualName(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm
+                    text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none"
+                />
+                <input
+                  required
+                  type="tel"
+                  placeholder="Phone number *"
+                  value={manualPhone}
+                  onChange={e => setManualPhone(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm
+                    text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none"
+                />
+                <input
+                  type="email"
+                  placeholder="Email (optional)"
+                  value={manualEmail}
+                  onChange={e => setManualEmail(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm
+                    text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none"
+                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
+                    {campaign.currency === 'USD' ? '$' : campaign.currency}
+                  </span>
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={manualAmount}
+                    onChange={e => setManualAmount(e.target.value)}
+                    placeholder="Amount sent"
+                    className="w-full rounded-xl border border-gray-200 bg-white pl-8 pr-4 py-3 text-sm
+                      text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+
+                {campaign.allow_anonymous_contributions && (
+                  <label className="flex items-center gap-2.5 cursor-pointer px-1">
+                    <input
+                      type="checkbox"
+                      checked={manualAnon}
+                      onChange={e => setManualAnon(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="text-sm text-gray-700">Keep my name private on the board</span>
+                  </label>
+                )}
+
+                {manualError && <p className="text-sm text-red-500 text-center">{manualError}</p>}
+
+                <button
+                  type="submit"
+                  disabled={manualSubmitting}
+                  className="w-full rounded-2xl bg-gray-900 py-4 text-sm font-bold text-white
+                    hover:bg-gray-700 active:scale-[0.98] disabled:opacity-60 transition-all"
+                >
+                  {manualSubmitting ? 'Submitting…' : "I've sent the payment ✓"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setManualMethod(null); setManualError('') }}
+                  className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Back
+                </button>
+              </form>
+            </div>
+          )}
+
+          {manualDone && (
+            <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-5 text-center">
+              <p className="text-2xl mb-2">🎉</p>
+              <p className="font-semibold text-green-800 text-sm">Payment submitted!</p>
+              <p className="text-xs text-green-700 mt-1">
+                The organizer will confirm your payment and you&apos;ll appear on the board.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Board ── */}
       <div className="px-4 py-6">

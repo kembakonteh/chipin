@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Generic, List, Optional, TypeVar
 
@@ -30,6 +30,9 @@ class CampaignCreate(BaseModel):
     visibility_mode: VisibilityMode = VisibilityMode.full_name
     allow_anonymous_contributions: bool = True
     whatsapp_reminders_enabled: bool = True
+    payment_deadline: Optional[date] = None
+    zelle_info: Optional[str] = None
+    cashapp_handle: Optional[str] = None
     template_id: Optional[uuid.UUID] = None
     org_id: Optional[uuid.UUID] = None
 
@@ -50,6 +53,9 @@ class CampaignUpdate(BaseModel):
     allow_anonymous_contributions: Optional[bool] = None
     status: Optional[CampaignStatus] = None
     whatsapp_reminders_enabled: Optional[bool] = None
+    payment_deadline: Optional[date] = None
+    zelle_info: Optional[str] = None
+    cashapp_handle: Optional[str] = None
 
 
 class CampaignResponse(BaseModel):
@@ -68,6 +74,9 @@ class CampaignResponse(BaseModel):
     allow_anonymous_contributions: bool
     status: CampaignStatus
     whatsapp_reminders_enabled: bool
+    payment_deadline: Optional[date]
+    zelle_info: Optional[str]
+    cashapp_handle: Optional[str]
     platform_fee_pct: Decimal
     org_id: Optional[uuid.UUID]
     created_at: datetime

@@ -16,6 +16,9 @@ interface Form {
   visibility_mode: VisibilityMode
   allow_anonymous_contributions: boolean
   whatsapp_reminders_enabled: boolean
+  payment_deadline: string
+  zelle_info: string
+  cashapp_handle: string
 }
 
 function toForm(c: Campaign): Form {
@@ -29,6 +32,9 @@ function toForm(c: Campaign): Form {
     visibility_mode: c.visibility_mode,
     allow_anonymous_contributions: c.allow_anonymous_contributions,
     whatsapp_reminders_enabled: c.whatsapp_reminders_enabled,
+    payment_deadline: c.payment_deadline ?? '',
+    zelle_info: c.zelle_info ?? '',
+    cashapp_handle: c.cashapp_handle ?? '',
   }
 }
 
@@ -59,6 +65,9 @@ export default function SettingsTab({ campaign }: Props) {
         visibility_mode: form.visibility_mode,
         allow_anonymous_contributions: form.allow_anonymous_contributions,
         whatsapp_reminders_enabled: form.whatsapp_reminders_enabled,
+        payment_deadline: form.payment_deadline || null,
+        zelle_info: form.zelle_info.trim() || null,
+        cashapp_handle: form.cashapp_handle.trim() || null,
       }).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['campaign', campaign.slug] })
@@ -242,6 +251,90 @@ export default function SettingsTab({ campaign }: Props) {
             <span className="block text-xs text-gray-500">Get notified when someone pays</span>
           </div>
         </label>
+      </div>
+
+      {/* Manual payment info */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Manual payment info</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Shown on the public page so contributors can pay via Zelle or CashApp directly.
+            Leave blank to hide the option.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">
+            💜 Zelle phone or email
+          </label>
+          <input
+            type="text"
+            value={form.zelle_info}
+            onChange={(e) => set('zelle_info', e.target.value)}
+            placeholder="e.g. +12025551234 or you@email.com"
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+              text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">
+            💚 CashApp $cashtag
+          </label>
+          <input
+            type="text"
+            value={form.cashapp_handle}
+            onChange={(e) => set('cashapp_handle', e.target.value)}
+            placeholder="e.g. $YourName"
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+              text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Payment deadline */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-3">
+        <h3 className="text-sm font-semibold text-white">Payment deadline</h3>
+        <p className="text-xs text-gray-500">
+          Reminders escalate automatically at 7, 3, and 1 day(s) before the deadline.
+          The campaign closes automatically on the deadline date.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={form.payment_deadline}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => set('payment_deadline', e.target.value)}
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+              text-sm text-white focus:border-brand-500 focus:outline-none"
+          />
+          {form.payment_deadline && (
+            <button
+              type="button"
+              onClick={() => set('payment_deadline', '')}
+              className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {form.payment_deadline && (() => {
+          const days = Math.ceil(
+            (new Date(form.payment_deadline + 'T00:00:00').getTime() - Date.now()) / 86_400_000
+          )
+          if (days < 0) return (
+            <p className="text-xs text-red-400">Deadline is in the past — save to close the campaign immediately.</p>
+          )
+          if (days === 0) return (
+            <p className="text-xs text-yellow-400">Deadline is today — the campaign will close tonight.</p>
+          )
+          return (
+            <p className="text-xs text-gray-400">
+              {days} day{days !== 1 ? 's' : ''} until deadline
+              {days <= 7 ? ' — reminders will go out today.' : '.'}
+            </p>
+          )
+        })()}
       </div>
 
       {/* Save */}

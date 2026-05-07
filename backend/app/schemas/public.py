@@ -38,4 +38,15 @@ class PublicCampaignResponse(BaseModel):
     paid_count: int
     contributors: List[PublicContributorItem]
     status: CampaignStatus
+    zelle_info: Optional[str] = None
+    cashapp_handle: Optional[str] = None
     beneficiary: Optional[BeneficiaryResponse] = None
+
+
+class ManualPayRequest(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = None
+    amount: Decimal
+    method: str  # "zelle" | "cashapp"
+    is_anonymous: bool = False

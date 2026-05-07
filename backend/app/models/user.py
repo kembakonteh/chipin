@@ -7,6 +7,7 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.campaign import Campaign
+    from app.models.user_features import UserFeatures
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -19,3 +20,6 @@ class User(Base, UUIDMixin, TimestampMixin):
     stripe_account_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     campaigns: Mapped[List["Campaign"]] = relationship("Campaign", back_populates="owner")
+    features: Mapped[Optional["UserFeatures"]] = relationship(
+        "UserFeatures", back_populates="user", uselist=False
+    )

@@ -1,3 +1,62 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Global overflow guard ───────────────────────────────────────── */
+@layer base {
+  html, body, #root {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+}
+
+/* ── Hide webkit scrollbar on nav scroll container ───────────────── */
+.chipin-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Nav label visibility ────────────────────────────────────────── */
+/* Default (≥ 480px): show full label, hide icon and abbr */
+.chipin-nav-icon { display: none; }
+.chipin-nav-abbr { display: none; }
+.chipin-nav-label { display: inline; }
+
+/* Under 480px: show icon only, hide label and abbr */
+@media (max-width: 479px) {
+  .chipin-nav-icon  { display: inline; }
+  .chipin-nav-label { display: none; }
+  .chipin-nav-abbr  { display: none; }
+}
+
+/* ── Campaign card grid ──────────────────────────────────────────── */
+.chipin-card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;        /* 1 column by default (mobile) */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .chipin-card-grid {
+    grid-template-columns: 1fr 1fr;  /* 2 columns on wider screens */
+  }
+}
+
+/* ── Campaign card ───────────────────────────────────────────────── */
+.chipin-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;                       /* prevent flex/grid blowout */
+}
+
+/* ── Scrollbar hide utility (kept for other uses) ────────────────── */
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -1,3 +1,10 @@
+export interface UserFeatures {
+  campaigns_enabled: boolean
+  susu_enabled: boolean
+  org_enabled: boolean
+  onboarding_completed: boolean
+}
+
 export type SusuFrequency = 'weekly' | 'biweekly' | 'monthly'
 export type SusuStatus = 'forming' | 'active' | 'completed' | 'paused'
 export type SusuPayoutOrder = 'fixed' | 'random' | 'bid'
@@ -93,6 +100,9 @@ export interface Campaign {
   allow_anonymous_contributions: boolean
   status: CampaignStatus
   whatsapp_reminders_enabled: boolean
+  payment_deadline: string | null
+  zelle_info: string | null
+  cashapp_handle: string | null
   platform_fee_pct: string
   org_id: string | null
   created_at: string

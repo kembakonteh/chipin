@@ -42,6 +42,7 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
       tabIndex={0}
       onClick={() => nav(`/dashboard/${campaign.slug}`)}
       onKeyDown={(e) => e.key === 'Enter' && nav(`/dashboard/${campaign.slug}`)}
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', minWidth: 0 }}
       className="group cursor-pointer rounded-xl border border-gray-700 bg-gray-900 p-5
         hover:border-brand-600 hover:bg-gray-800/70 transition-colors focus:outline-none
         focus:ring-2 focus:ring-brand-500"
@@ -70,6 +71,20 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
         </div>
         <StatusBadge status={campaign.status} />
       </div>
+
+      {/* Deadline badge */}
+      {campaign.payment_deadline && campaign.status === 'active' && (() => {
+        const days = Math.ceil(
+          (new Date(campaign.payment_deadline + 'T00:00:00').getTime() - Date.now()) / 86_400_000
+        )
+        const urgent = days <= 3
+        const label = days <= 0 ? 'Deadline passed' : days === 1 ? 'Due tomorrow' : `Due in ${days}d`
+        return (
+          <p className={`text-xs font-medium mb-2 ${urgent ? 'text-red-400' : 'text-yellow-400'}`}>
+            ⏰ {label}
+          </p>
+        )
+      })()}
 
       {/* Progress bar */}
       {isLoading ? (
