@@ -25,7 +25,7 @@ export default function CopyLinkBar({ campaign, contributors = [] }: Props) {
     const stats = computeStats(campaign, contributors)
     const msg = [
       `Hey! Chip in for *${campaign.title}* 💚`,
-      `${stats.paidCount} people have contributed — ${fmt(stats.totalRaised, campaign.currency)} raised of ${fmt(stats.goalAmount, campaign.currency)}.`,
+      `${stats.paidCount} people have contributed — ${fmt(stats.totalRaised, campaign.currency)} raised of ${fmt(stats.goalAmount ?? 0, campaign.currency)}.`,
       `Join here: ${publicUrl}`,
     ].join('\n\n')
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')

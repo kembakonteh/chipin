@@ -174,6 +174,7 @@ export interface Contributor {
   added_by_organizer: boolean
   is_anonymous: boolean
   payment_note: string | null
+  message: string | null
   created_at: string
   privacy_note: string | null
 }

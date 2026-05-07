@@ -19,6 +19,7 @@ import PayoutSettings from './pages/Settings/PayoutSettings'
 import ProfilePage from './pages/ProfilePage'
 import JoinOrg from './pages/JoinOrg'
 import CampaignsPage from './pages/CampaignsPage'
+import InstallPrompt from './components/InstallPrompt'
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="/join/:token" element={<JoinOrg />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      <InstallPrompt />
     </BrowserRouter>
   )
 }
