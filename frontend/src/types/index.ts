@@ -1,3 +1,10 @@
+export interface UserFeatures {
+  campaigns_enabled: boolean
+  susu_enabled: boolean
+  org_enabled: boolean
+  onboarding_completed: boolean
+}
+
 export type SusuFrequency = 'weekly' | 'biweekly' | 'monthly'
 export type SusuStatus = 'forming' | 'active' | 'completed' | 'paused'
 export type SusuPayoutOrder = 'fixed' | 'random' | 'bid'
@@ -39,6 +46,8 @@ export interface SusuCycleSummary {
   recipient_member_id: string
   recipient_name: string
   payout_sent_at: string | null
+  payout_method: string | null
+  payout_reference: string | null
   status: SusuCycleStatus
 }
 

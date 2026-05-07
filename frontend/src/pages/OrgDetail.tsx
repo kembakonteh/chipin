@@ -521,6 +521,21 @@ function SettingsTab({ org }: { org: Org }) {
   const [whatsapp, setWhatsapp] = useState(org.whatsapp_group_name ?? '')
   const [saved, setSaved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmRotate, setConfirmRotate] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const { data: inviteData } = useQuery<{ invite_token: string; invite_url: string }>({
+    queryKey: ['org-invite', org.slug],
+    queryFn: () => api.get(`/orgs/${org.slug}/invite-token`).then(getData),
+  })
+
+  const rotateToken = useMutation({
+    mutationFn: () => api.post(`/orgs/${org.slug}/invite-token/rotate`).then(getData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-invite', org.slug] })
+      setConfirmRotate(false)
+    },
+  })
 
   const updateOrg = useMutation({
     mutationFn: (data: object) =>
@@ -647,6 +662,64 @@ function SettingsTab({ org }: { org: Org }) {
         <p className="text-sm text-gray-500">
           Public page: <Link to={`/o/${org.slug}`} className="text-brand-400 hover:underline" target="_blank">/o/{org.slug}</Link>
         </p>
+      </div>
+
+      {/* Invite link */}
+      <div className="border-t border-gray-800 pt-6">
+        <p className="text-sm font-semibold text-white mb-1">Invite Link</p>
+        <p className="text-xs text-gray-500 mb-3">
+          Share this link so members can join your organisation directly. Rotate it to invalidate the old link.
+        </p>
+        {inviteData ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={inviteData.invite_url}
+                className="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-xs text-gray-300 truncate focus:outline-none"
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteData.invite_url)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="px-3 py-2 border border-gray-700 rounded-lg text-xs text-gray-300 hover:text-white hover:border-gray-500 transition-colors whitespace-nowrap"
+              >
+                {copied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+            {!confirmRotate ? (
+              <button
+                onClick={() => setConfirmRotate(true)}
+                className="self-start text-xs text-gray-500 hover:text-red-400 transition-colors"
+              >
+                Rotate link…
+              </button>
+            ) : (
+              <div className="rounded-lg border border-red-900/40 bg-red-950/20 p-3 space-y-2">
+                <p className="text-xs text-red-400">The old link will stop working. Continue?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => rotateToken.mutate()}
+                    disabled={rotateToken.isPending}
+                    className="px-3 py-1.5 bg-red-700 text-white text-xs rounded-lg hover:bg-red-600 disabled:opacity-50"
+                  >
+                    {rotateToken.isPending ? 'Rotating…' : 'Yes, rotate'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRotate(false)}
+                    className="px-3 py-1.5 border border-gray-700 text-gray-400 text-xs rounded-lg hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-600">Loading…</div>
+        )}
       </div>
 
       {/* Danger zone */}

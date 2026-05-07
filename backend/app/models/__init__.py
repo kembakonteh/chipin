@@ -18,9 +18,11 @@ from app.models.susu import (
 from app.models.payout import MethodType, Payout, PayoutMethod, PayoutStatus
 from app.models.template import CampaignTemplate
 from app.models.user import User
+from app.models.user_features import UserFeatures
 
 __all__ = [
     "User",
+    "UserFeatures",
     "Campaign",
     "CampaignType",
     "CampaignStatus",

@@ -43,6 +43,9 @@ class Org(Base, UUIDMixin, TimestampMixin):
     )
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     whatsapp_group_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    invite_token: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, default=uuid.uuid4, unique=True
+    )
 
     owner: Mapped["User"] = relationship("User")
     members: Mapped[List["OrgMember"]] = relationship("OrgMember", back_populates="org")

@@ -1,15 +1,21 @@
-import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
   const { isAuthenticated } = useAuth()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [devLink, setDevLink] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const next = searchParams.get('next')
+    if (next) sessionStorage.setItem('auth_next', next)
+  }, [])
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
 

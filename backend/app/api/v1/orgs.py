@@ -23,6 +23,7 @@ from slugify import slugify
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.r2 import upload_bytes
@@ -36,6 +37,8 @@ from app.schemas.org import (
     CampaignBriefWithPaid,
     ContributorBrief,
     CsvImportResponse,
+    InviteTokenResponse,
+    JoinOrgResponse,
     MemberCampaignRecord,
     MemberHistoryResponse,
     MembershipStatusResponse,
@@ -48,6 +51,7 @@ from app.schemas.org import (
     OrgStatsResponse,
     OrgUpdate,
     PublicOrgCampaign,
+    PublicOrgInviteResponse,
     PublicOrgResponse,
     UpdateMemberResponse,
 )
@@ -139,6 +143,7 @@ async def create_org(
         org_type=body.org_type,
         whatsapp_group_name=body.whatsapp_group_name,
         owner_id=current_user.id,
+        invite_token=uuid.uuid4(),
     )
     db.add(org)
     await db.flush()  # get org.id
@@ -719,6 +724,35 @@ async def membership_status(
     )
 
 
+# ── Invite token ──────────────────────────────────────────────────────────────
+
+@router.get("/{slug}/invite-token", response_model=InviteTokenResponse)
+async def get_invite_token(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    org = await _get_org_or_404(slug, db)
+    await _require_org_admin(org, current_user, db)
+    invite_url = f"{settings.FRONTEND_URL}/join/{org.invite_token}"
+    return InviteTokenResponse(invite_token=str(org.invite_token), invite_url=invite_url)
+
+
+@router.post("/{slug}/invite-token/rotate", response_model=InviteTokenResponse)
+async def rotate_invite_token(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    org = await _get_org_or_404(slug, db)
+    await _require_org_admin(org, current_user, db)
+    org.invite_token = uuid.uuid4()
+    await db.commit()
+    await db.refresh(org)
+    invite_url = f"{settings.FRONTEND_URL}/join/{org.invite_token}"
+    return InviteTokenResponse(invite_token=str(org.invite_token), invite_url=invite_url)
+
+
 # ── Public org page ───────────────────────────────────────────────────────────
 
 public_router = APIRouter(tags=["public"])
@@ -785,3 +819,81 @@ async def public_org(slug: str, db: AsyncSession = Depends(get_db)):
             active_campaigns=len(active_campaigns),
         ),
     )
+
+
+@public_router.get("/o/invite/{token}", response_model=PublicOrgInviteResponse)
+async def public_org_invite_preview(token: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Org).where(Org.invite_token == token))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invite link")
+
+    count_result = await db.execute(
+        select(func.count()).where(OrgMember.org_id == org.id, OrgMember.is_active.is_(True))
+    )
+    return PublicOrgInviteResponse(
+        org_name=org.name,
+        description=org.description,
+        member_count=count_result.scalar_one(),
+        slug=org.slug or "",
+    )
+
+
+@public_router.post("/o/invite/{token}/join", response_model=JoinOrgResponse)
+async def join_org_via_invite(
+    token: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Org).where(Org.invite_token == token))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invite link")
+
+    # Check if already a member
+    existing = await db.execute(
+        select(OrgMember).where(OrgMember.org_id == org.id, OrgMember.user_id == current_user.id)
+    )
+    if existing.scalar_one_or_none():
+        return JoinOrgResponse(message="already_member", org_slug=org.slug or "")
+
+    # Try to link to an existing unlinked member row matched by email or phone
+    matched = None
+    if current_user.email:
+        res = await db.execute(
+            select(OrgMember).where(
+                OrgMember.org_id == org.id,
+                OrgMember.user_id.is_(None),
+                OrgMember.email == current_user.email,
+            )
+        )
+        matched = res.scalar_one_or_none()
+
+    if not matched and current_user.phone:
+        res = await db.execute(
+            select(OrgMember).where(
+                OrgMember.org_id == org.id,
+                OrgMember.user_id.is_(None),
+                OrgMember.phone == current_user.phone,
+            )
+        )
+        matched = res.scalar_one_or_none()
+
+    if matched:
+        matched.user_id = current_user.id
+        matched.is_active = True
+    else:
+        name = current_user.email or current_user.phone or "Member"
+        new_member = OrgMember(
+            org_id=org.id,
+            user_id=current_user.id,
+            name=name,
+            email=current_user.email,
+            phone=current_user.phone,
+            role=OrgMemberRole.member,
+            is_active=True,
+        )
+        db.add(new_member)
+
+    await db.commit()
+    return JoinOrgResponse(message="joined", org_slug=org.slug or "")

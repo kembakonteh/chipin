@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    allowedHosts: ['chipin.kafotech.io'],
     proxy: {
       '/api': {
         target: 'http://chipin-backend:8000',

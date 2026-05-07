@@ -1,130 +1,110 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
-const NAV_ITEMS = [
-  { label: 'Campaigns',     short: 'Camp.',   to: '/dashboard',      match: ['/dashboard', '/campaigns'] },
-  { label: 'Organizations', short: 'Orgs',    to: '/orgs',           match: ['/orgs'] },
-  { label: 'Recurring',     short: 'Recur.',  to: '/recurring',      match: ['/recurring'] },
-  { label: 'Susu',          short: 'Susu',    to: '/susu',           match: ['/susu'] },
-  { label: 'Payouts',       short: 'Pay.',    to: '/settings/payout',match: ['/settings'] },
-]
+interface Tab {
+  to: string
+  label: string
+  icon: string
+}
+
+function buildTabs(features: { campaigns_enabled: boolean; susu_enabled: boolean; org_enabled: boolean } | null): Tab[] {
+  const tabs: Tab[] = [{ to: '/dashboard', label: 'Home', icon: '🏠' }]
+  if (features?.campaigns_enabled) tabs.push({ to: '/campaigns', label: 'Campaigns', icon: '📋' })
+  if (features?.susu_enabled) tabs.push({ to: '/susu', label: 'Susu', icon: '💰' })
+  if (features?.org_enabled) tabs.push({ to: '/orgs', label: 'My Org', icon: '👥' })
+  tabs.push({ to: '/profile', label: 'Profile', icon: '👤' })
+  return tabs
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { logout } = useAuth()
-  const nav = useNavigate()
+  const { features } = useAuth()
   const { pathname } = useLocation()
+  const tabs = buildTabs(features)
 
-  function handleLogout() {
-    logout()
-    nav('/login')
-  }
-
-  function isActive(match: string[]) {
-    return match.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'))
+  function isActive(to: string) {
+    if (to === '/dashboard') return pathname === '/dashboard'
+    if (to === '/campaigns') return pathname === '/campaigns' || pathname.startsWith('/campaigns/')  || pathname.startsWith('/dashboard/')
+    return pathname.startsWith(to)
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div style={{ minHeight: '100vh', background: '#030712', color: '#f3f4f6', paddingBottom: '64px' }}>
 
-      {/* Sticky top header */}
-      <header
-        className="sticky top-0 z-30 border-b border-gray-800 bg-gray-950/90 backdrop-blur"
-        style={{ width: '100%', maxWidth: '100vw', boxSizing: 'border-box' }}
-      >
+      {/* Minimal top header — logo only */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 30,
+        background: 'rgba(3,7,18,0.95)',
+        borderBottom: '1px solid #1f2937',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          padding: '0 12px',
-          height: '52px',
-          gap: '8px',
-          width: '100%',
-          boxSizing: 'border-box',
+          height: '48px',
+          padding: '0 16px',
         }}>
-
-          {/* Logo — fixed, never shrinks */}
-          <Link
-            to="/dashboard"
-            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
-          >
-            <span style={{ fontSize: '22px', lineHeight: 1 }}>🌍</span>
-            <div style={{ lineHeight: 1.1 }}>
-              <span style={{ display: 'block', fontSize: '10px', color: '#52B788', fontWeight: 500, letterSpacing: '0.05em' }}>KafoTech</span>
-              <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#fff' }}>ChipIn</span>
-            </div>
+          <Link to="/dashboard" style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            textDecoration: 'none',
+          }}>
+            <span style={{ fontSize: '20px' }}>🌍</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>ChipIn</span>
           </Link>
-
-          {/* Scrollable nav — fills available space */}
-          <div
-            className="nav-scroll"
-            style={{
-              flex: 1,
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              WebkitOverflowScrolling: 'touch',
-            }}
-          >
-            <nav style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '2px',
-              whiteSpace: 'nowrap',
-              width: 'max-content',
-              padding: '0 4px',
-            }}>
-              {NAV_ITEMS.map(item => {
-                const active = isActive(item.match)
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    style={{
-                      display: 'inline-block',
-                      padding: '5px 10px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: active ? 600 : 400,
-                      color: active ? '#B7E4C7' : '#9ca3af',
-                      background: active ? 'rgba(45,106,79,0.3)' : 'transparent',
-                      textDecoration: 'none',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span className="nav-label-full">{item.label}</span>
-                    <span className="nav-label-short">{item.short}</span>
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-
-          {/* Sign out — fixed, never shrinks */}
-          <button
-            type="button"
-            onClick={handleLogout}
-            style={{
-              flexShrink: 0,
-              padding: '5px 10px',
-              borderRadius: '8px',
-              border: '1px solid #374151',
-              background: 'transparent',
-              color: '#9ca3af',
-              fontSize: '12px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Sign out
-          </button>
-
         </div>
       </header>
 
       {/* Page content */}
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main style={{
+        maxWidth: '1024px',
+        margin: '0 auto',
+        padding: '24px 16px',
+        boxSizing: 'border-box',
+        width: '100%',
+      }}>
         {children}
       </main>
+
+      {/* Bottom tab bar */}
+      <nav style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 40,
+        background: 'rgba(3,7,18,0.97)',
+        borderTop: '1px solid #1f2937',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex',
+        height: '64px',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
+        {tabs.map(tab => {
+          const active = isActive(tab.to)
+          return (
+            <Link
+              key={`${tab.to}-${tab.label}`}
+              to={tab.to}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '2px',
+                textDecoration: 'none',
+                color: active ? '#3b82f6' : '#6b7280',
+                transition: 'color 0.15s',
+              }}
+            >
+              <span style={{ fontSize: '22px', lineHeight: 1 }}>{tab.icon}</span>
+              <span style={{ fontSize: '11px', fontWeight: active ? 600 : 400 }}>{tab.label}</span>
+            </Link>
+          )
+        })}
+      </nav>
 
     </div>
   )

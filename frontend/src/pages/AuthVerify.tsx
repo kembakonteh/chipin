@@ -2,11 +2,11 @@ import { useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
-import type { TokenResponse } from '../types'
+import type { TokenResponse, UserFeatures } from '../types'
 
 export default function AuthVerify() {
   const [params] = useSearchParams()
-  const { login } = useAuth()
+  const { login, setFeatures } = useAuth()
   const nav = useNavigate()
   const ran = useRef(false)
 
@@ -21,9 +21,21 @@ export default function AuthVerify() {
     }
 
     api.get<TokenResponse>(`/auth/verify?token=${encodeURIComponent(token)}`)
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         login(data.access_token, data.refresh_token)
-        nav('/dashboard', { replace: true })
+        try {
+          const { data: f } = await api.get<UserFeatures>('/users/me/features')
+          setFeatures(f)
+          const next = sessionStorage.getItem('auth_next')
+          if (next) {
+            sessionStorage.removeItem('auth_next')
+            nav(next, { replace: true })
+          } else {
+            nav(f.onboarding_completed ? '/dashboard' : '/onboarding', { replace: true })
+          }
+        } catch {
+          nav('/dashboard', { replace: true })
+        }
       })
       .catch(() => {
         nav('/login?error=invalid_token', { replace: true })

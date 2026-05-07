@@ -282,8 +282,15 @@ export default function SusuCreatePage() {
                 <textarea
                   value={rules}
                   onChange={e => setRules(e.target.value)}
-                  placeholder="e.g. Contributions must be paid by the due date. Late fees apply after 5 days..."
-                  rows={3}
+                  placeholder={`e.g.
+1. Contributions are due by the 1st of each month. A 5-day grace period applies — after that a $10 late fee is added to the next cycle's pot.
+2. Any member who misses 2 consecutive cycles without prior notice loses their payout turn and is removed from the group.
+3. Payout positions can only be swapped with the organiser's written approval at least 7 days before the due date.
+4. A member wishing to exit must find an approved replacement — contributions already paid are non-refundable.
+5. No member may hold more than 2 hands at a time.
+6. All funds are held in the organiser's account and must be paid out within 3 days of the cycle closing.
+7. In the unfortunate event of a member's passing, their next-of-kin may receive any outstanding payout owed, at the organiser's discretion. The family is not obligated to continue contributions for remaining cycles.`}
+                  rows={8}
                   className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
                 />
               </div>

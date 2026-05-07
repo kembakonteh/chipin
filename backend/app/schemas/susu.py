@@ -96,6 +96,8 @@ class SusuCycleResponse(BaseModel):
     recipient_member_id: uuid.UUID
     recipient_name: str
     payout_sent_at: Optional[datetime]
+    payout_method: Optional[str] = None
+    payout_reference: Optional[str] = None
     status: SusuCycleStatus
     contributions: List[SusuContributionResponse] = []
 
@@ -111,6 +113,8 @@ class SusuCycleSummary(BaseModel):
     recipient_member_id: uuid.UUID
     recipient_name: str
     payout_sent_at: Optional[datetime]
+    payout_method: Optional[str] = None
+    payout_reference: Optional[str] = None
     status: SusuCycleStatus
 
 
@@ -157,3 +161,8 @@ class SusuCheckoutResponse(BaseModel):
 
 class MarkPaidRequest(BaseModel):
     paid_via: SusuPaidVia = SusuPaidVia.cash
+
+
+class MarkPayoutRequest(BaseModel):
+    payout_method: str = "cash"
+    payout_reference: Optional[str] = None

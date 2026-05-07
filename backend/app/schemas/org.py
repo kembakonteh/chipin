@@ -165,3 +165,20 @@ class PublicOrgResponse(BaseModel):
     active_campaigns: List[PublicOrgCampaign]
     past_campaigns: List[PublicOrgCampaign]
     stats: OrgStatsResponse
+
+
+class InviteTokenResponse(BaseModel):
+    invite_token: str
+    invite_url: str
+
+
+class PublicOrgInviteResponse(BaseModel):
+    org_name: str
+    description: Optional[str]
+    member_count: int
+    slug: str
+
+
+class JoinOrgResponse(BaseModel):
+    message: str
+    org_slug: str

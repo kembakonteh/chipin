@@ -34,6 +34,7 @@ from app.models.susu import (
 from app.models.user import User
 from app.schemas.susu import (
     MarkPaidRequest,
+    MarkPayoutRequest,
     SusuCheckoutResponse,
     SusuContributeRequest,
     SusuContributionResponse,
@@ -108,6 +109,8 @@ def _build_cycle_response(cycle: SusuCycle) -> SusuCycleResponse:
         recipient_member_id=cycle.recipient_member_id,
         recipient_name=recipient_name,
         payout_sent_at=cycle.payout_sent_at,
+        payout_method=cycle.payout_method,
+        payout_reference=cycle.payout_reference,
         status=cycle.status,
         contributions=contribs,
     )
@@ -133,6 +136,8 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
             recipient_member_id=cycle.recipient_member_id,
             recipient_name=rname,
             payout_sent_at=cycle.payout_sent_at,
+            payout_method=cycle.payout_method,
+            payout_reference=cycle.payout_reference,
             status=cycle.status,
         ))
 
@@ -568,6 +573,7 @@ async def mark_contribution_paid(
 async def mark_payout_sent(
     slug: str,
     cycle_number: int,
+    body: MarkPayoutRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -589,6 +595,8 @@ async def mark_payout_sent(
 
     cycle.payout_sent_at = datetime.now(timezone.utc)
     cycle.status = SusuCycleStatus.paid_out
+    cycle.payout_method = body.payout_method
+    cycle.payout_reference = body.payout_reference
 
     # Mark recipient as having received payout
     recipient_result = await db.execute(select(SusuMember).where(SusuMember.id == cycle.recipient_member_id))
@@ -615,10 +623,12 @@ async def mark_payout_sent(
     currency = "$"
 
     # Feature 7: Personal payout receipt to recipient
+    method_label = body.payout_method.capitalize() if body.payout_method else "transfer"
+    ref_part = f" (ref: {body.payout_reference})" if body.payout_reference else ""
     if recipient and recipient.phone:
         receipt_msg = (
             f"Hi {rname}! Your Susu payout of {currency}{pot:.2f} from '{group.name}' "
-            f"has been sent. Enjoy!"
+            f"has been sent via {method_label}{ref_part}. Enjoy!"
         )
         try:
             from app.workers.tasks import _send_whatsapp_text
@@ -628,7 +638,7 @@ async def mark_payout_sent(
 
     # Feature 6: Cycle summary to all members
     summary_msg = (
-        f"Cycle {cycle_number} complete! {rname} received {currency}{pot:.2f}. "
+        f"Cycle {cycle_number} complete! {rname} received {currency}{pot:.2f} via {method_label}. "
         f"Next cycle due {next_due_str}. Keep it up!"
     )
     for member in group.members:
@@ -648,6 +658,8 @@ async def mark_payout_sent(
         recipient_member_id=cycle.recipient_member_id,
         recipient_name=rname,
         payout_sent_at=cycle.payout_sent_at,
+        payout_method=cycle.payout_method,
+        payout_reference=cycle.payout_reference,
         status=cycle.status,
     )
 

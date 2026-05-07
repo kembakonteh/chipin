@@ -158,6 +158,8 @@ class SusuCycle(Base, UUIDMixin):
         UUID(as_uuid=True), ForeignKey("susu_members.id", ondelete="RESTRICT"), nullable=False
     )
     payout_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    payout_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    payout_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[SusuCycleStatus] = mapped_column(
         Enum(SusuCycleStatus, name="susucyclestatus"), nullable=False,
         default=SusuCycleStatus.collecting, server_default="collecting",

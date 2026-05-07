@@ -1,77 +1,96 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { Campaign, PaginatedResponse } from '../types'
 import Layout from '../components/Layout'
-import CampaignCard from '../components/CampaignCard'
 import NewCampaignModal from '../components/NewCampaignModal'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Dashboard() {
+  const { features } = useAuth()
   const [showNew, setShowNew] = useState(false)
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['campaigns'],
     queryFn: () =>
       api.get<PaginatedResponse<Campaign>>('/campaigns').then(r => r.data),
+    enabled: !!features?.campaigns_enabled,
   })
 
   const campaigns = data?.items ?? []
+  const active = campaigns.filter(c => c.status === 'active')
 
   return (
     <Layout>
-      {/* Page header */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Campaigns</h1>
-          {!isLoading && (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {data?.total ?? 0} campaign{data?.total !== 1 ? 's' : ''}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold
-            text-white hover:bg-brand-500 transition-colors shrink-0"
-        >
-          <span className="text-base leading-none">＋</span>
-          <span>New Campaign</span>
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold text-white mb-6">Home</h1>
 
-      {/* Campaign grid */}
-      {isLoading ? (
-        <div className="campaign-grid">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-36 rounded-xl bg-gray-900 border border-gray-800 animate-pulse" />
-          ))}
-        </div>
-      ) : isError ? (
-        <div className="rounded-xl border border-red-900 bg-red-950/40 p-6 text-center">
-          <p className="text-red-300">Failed to load campaigns.</p>
-        </div>
-      ) : campaigns.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-700 p-12 text-center">
-          <span className="text-4xl block mb-3">🌱</span>
-          <p className="text-gray-400 font-medium mb-1">No campaigns yet</p>
-          <p className="text-sm text-gray-600 mb-5">Create your first campaign to get started.</p>
-          <button
-            type="button"
-            onClick={() => setShowNew(true)}
-            className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white
-              hover:bg-brand-500 transition-colors"
+      <div className="space-y-4">
+        {/* Campaigns summary */}
+        {features?.campaigns_enabled && (
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📋</span>
+                <span className="font-semibold text-white">Campaigns</span>
+              </div>
+              <Link to="/campaigns" className="text-xs text-brand-400 hover:text-brand-300">
+                View all →
+              </Link>
+            </div>
+            {isLoading ? (
+              <div className="h-8 w-32 rounded bg-gray-800 animate-pulse" />
+            ) : (
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-2xl font-bold text-white">{data?.total ?? 0}</p>
+                  <p className="text-xs text-gray-500">total</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-brand-400">{active.length}</p>
+                  <p className="text-xs text-gray-500">active</p>
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
+              className="mt-4 w-full rounded-lg border border-gray-700 py-2 text-sm text-gray-400
+                hover:text-white hover:border-gray-500 transition-colors"
+            >
+              + New Campaign
+            </button>
+          </div>
+        )}
+
+        {/* Susu summary */}
+        {features?.susu_enabled && (
+          <Link
+            to="/susu"
+            className="block rounded-xl border border-gray-800 bg-gray-900 p-5 hover:border-gray-700 transition-colors"
           >
-            Create a campaign
-          </button>
-        </div>
-      ) : (
-        <div className="campaign-grid">
-          {campaigns.map((c) => (
-            <CampaignCard key={c.id} campaign={c} />
-          ))}
-        </div>
-      )}
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💰</span>
+              <span className="font-semibold text-white">Susu</span>
+              <span className="ml-auto text-xs text-brand-400">View →</span>
+            </div>
+          </Link>
+        )}
+
+        {/* Org summary */}
+        {features?.org_enabled && (
+          <Link
+            to="/orgs"
+            className="block rounded-xl border border-gray-800 bg-gray-900 p-5 hover:border-gray-700 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl">👥</span>
+              <span className="font-semibold text-white">My Organisation</span>
+              <span className="ml-auto text-xs text-brand-400">View →</span>
+            </div>
+          </Link>
+        )}
+      </div>
 
       {showNew && <NewCampaignModal onClose={() => setShowNew(false)} />}
     </Layout>

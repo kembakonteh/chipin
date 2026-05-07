@@ -151,6 +151,9 @@ function CycleSummaryRow({ cycle, isCurrent }: { cycle: SusuCycleSummary; isCurr
       <div className="text-right text-xs text-gray-500 flex-shrink-0">
         <div>{formatDate(cycle.due_date)}</div>
         <div className="text-gray-600">{fmt(parseFloat(cycle.pot_amount))}</div>
+        {cycle.status === 'paid_out' && cycle.payout_method && (
+          <div className="text-purple-500 capitalize">{cycle.payout_method.replace('_', ' ')}</div>
+        )}
       </div>
     </div>
   )
@@ -271,6 +274,93 @@ function HistoryTab({ groupSlug }: { groupSlug: string }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Payout modal ──────────────────────────────────────────────────────────────
+
+const PAYOUT_METHODS = [
+  { value: 'zelle',         label: 'Zelle',          placeholder: 'Phone or email used' },
+  { value: 'cashapp',       label: 'CashApp',         placeholder: '$cashtag' },
+  { value: 'venmo',         label: 'Venmo',           placeholder: '@handle' },
+  { value: 'bank_transfer', label: 'Bank Transfer',   placeholder: 'Confirmation #' },
+  { value: 'cash',          label: 'Cash',            placeholder: 'Optional note' },
+  { value: 'check',         label: 'Check',           placeholder: 'Check #' },
+]
+
+function PayoutModal({
+  recipientName,
+  potAmount,
+  onConfirm,
+  onClose,
+  isPending,
+}: {
+  recipientName: string
+  potAmount: number
+  onConfirm: (method: string, reference: string) => void
+  onClose: () => void
+  isPending: boolean
+}) {
+  const [method, setMethod] = useState('zelle')
+  const [reference, setReference] = useState('')
+  const selected = PAYOUT_METHODS.find(m => m.value === method)!
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
+        <h2 className="text-lg font-bold text-white mb-1">Mark Payout Sent</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          {recipientName} · {fmt(potAmount)}
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Payment method</label>
+            <select
+              value={method}
+              onChange={e => { setMethod(e.target.value); setReference('') }}
+              className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+            >
+              {PAYOUT_METHODS.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">
+              Reference {method === 'cash' ? '(optional)' : ''}
+            </label>
+            <input
+              type="text"
+              value={reference}
+              onChange={e => setReference(e.target.value)}
+              placeholder={selected.placeholder}
+              className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={() => onConfirm(method, reference)}
+          disabled={isPending || (method !== 'cash' && !reference.trim())}
+          className="mt-6 w-full py-3 bg-purple-700 text-white font-semibold rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors"
+        >
+          {isPending ? 'Saving…' : `Confirm Payout via ${selected.label}`}
+        </button>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-3 w-full py-2 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 type DetailTab = 'current' | 'schedule' | 'members' | 'history'
 
 interface AddMemberForm {
@@ -288,6 +378,7 @@ export default function SusuDetail() {
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '', slots: '1' })
   const [addError, setAddError] = useState('')
+  const [showPayoutModal, setShowPayoutModal] = useState(false)
   // Feature 4: rules edit mode
   const [editingRules, setEditingRules] = useState(false)
   const [rulesText, setRulesText] = useState('')
@@ -324,9 +415,15 @@ export default function SusuDetail() {
   })
 
   const markPayoutSent = useMutation({
-    mutationFn: (cycleNum: number) =>
-      api.post(`/susu/${slug}/cycles/${cycleNum}/mark-paid-out`).then(getData),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', slug] }),
+    mutationFn: ({ cycleNum, method, reference }: { cycleNum: number; method: string; reference: string }) =>
+      api.post(`/susu/${slug}/cycles/${cycleNum}/mark-paid-out`, {
+        payout_method: method,
+        payout_reference: reference || null,
+      }).then(getData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      setShowPayoutModal(false)
+    },
   })
 
   const advanceCycle = useMutation({
@@ -504,18 +601,25 @@ export default function SusuDetail() {
             {/* Mark payout sent */}
             {cycle.status === 'collected' && !cycle.payout_sent_at && (
               <button
-                onClick={() => markPayoutSent.mutate(cycle.cycle_number)}
-                disabled={markPayoutSent.isPending}
+                onClick={() => setShowPayoutModal(true)}
                 className="mt-4 w-full py-2.5 bg-purple-700 text-white text-sm font-semibold rounded-lg
-                  hover:bg-purple-600 disabled:opacity-50 transition-colors"
+                  hover:bg-purple-600 transition-colors"
               >
-                {markPayoutSent.isPending ? 'Marking…' : `💸 Mark Payout Sent to ${cycle.recipient_name}`}
+                💸 Mark Payout Sent to {cycle.recipient_name}
               </button>
             )}
             {cycle.payout_sent_at && (
-              <p className="mt-3 text-center text-xs text-purple-400">
-                Payout sent {new Date(cycle.payout_sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </p>
+              <div className="mt-3 text-center">
+                <p className="text-xs text-purple-400">
+                  Payout sent {new Date(cycle.payout_sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {cycle.payout_method && (
+                    <span className="ml-1 capitalize">via {cycle.payout_method.replace('_', ' ')}</span>
+                  )}
+                  {cycle.payout_reference && (
+                    <span className="ml-1 text-purple-500">· {cycle.payout_reference}</span>
+                  )}
+                </p>
+              </div>
             )}
 
             {/* Advance to next cycle */}
@@ -791,6 +895,18 @@ export default function SusuDetail() {
           </div>
         )}
       </div>
+
+      {showPayoutModal && cycle && (
+        <PayoutModal
+          recipientName={cycle.recipient_name}
+          potAmount={potAmount}
+          isPending={markPayoutSent.isPending}
+          onConfirm={(method, reference) =>
+            markPayoutSent.mutate({ cycleNum: cycle.cycle_number, method, reference })
+          }
+          onClose={() => setShowPayoutModal(false)}
+        />
+      )}
     </Layout>
   )
 }

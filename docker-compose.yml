@@ -41,12 +41,12 @@ services:
       REDIS_URL: redis://chipin-redis:6379/0
       SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
-      ALLOWED_ORIGINS: "https://chipin.kafotech.io,http://89.167.108.80:5176"
+      ALLOWED_ORIGINS: "https://chipin.kafotech.io"
       STRIPE_SECRET_KEY: "sk_test_REPLACE_WITH_YOUR_KEY"
       STRIPE_WEBHOOK_SECRET: "whsec_REPLACE_WITH_YOUR_KEY"
       META_WHATSAPP_TOKEN: ""
       META_PHONE_NUMBER_ID: ""
-      FRONTEND_URL: "http://89.167.108.80:5176"
+      FRONTEND_URL: "https://chipin.kafotech.io"
     depends_on:
       chipin-db:
         condition: service_healthy
@@ -65,7 +65,7 @@ services:
     ports:
       - "5176:5173"
     environment:
-      VITE_API_URL: http://89.167.108.80:8003/api/v1
+      VITE_API_URL: https://chipin.kafotech.io/api/v1
     depends_on:
       - chipin-backend
     networks:
