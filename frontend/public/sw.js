@@ -8,22 +8,10 @@ self.addEventListener('fetch', event => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Skip non-GET and cross-origin
+  // Skip non-GET, cross-origin, and API requests.
+  // API responses are user-specific and must always come from the network.
   if (request.method !== 'GET' || url.origin !== location.origin) return
-
-  // API: network-first, cache 5 min
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request)
-        .then(res => {
-          const clone = res.clone()
-          caches.open(CACHE).then(c => c.put(request, clone))
-          return res
-        })
-        .catch(() => caches.match(request))
-    )
-    return
-  }
+  if (url.pathname.startsWith('/api/')) return
 
   // Images: cache-first
   if (request.destination === 'image') {
