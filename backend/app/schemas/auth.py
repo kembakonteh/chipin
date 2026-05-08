@@ -5,6 +5,10 @@ class MagicLinkRequest(BaseModel):
     email: EmailStr
 
 
+class VerifyRequest(BaseModel):
+    token: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import { useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import AuthVerify from './pages/AuthVerify'
+import AuthLanding from './pages/AuthLanding'
 import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import CampaignDetail from './pages/CampaignDetail'
@@ -43,6 +44,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/auth/verify" element={<AuthVerify />} />
+        <Route path="/auth/landing" element={<AuthLanding />} />
         <Route path="/onboarding" element={<Protected><Onboarding /></Protected>} />
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/campaigns" element={<Protected><CampaignsPage /></Protected>} />

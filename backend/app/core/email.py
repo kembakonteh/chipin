@@ -15,7 +15,7 @@ def _fmt_amount(amount: Decimal, currency: str) -> str:
 
 
 async def send_magic_link(email: str, token: str) -> None:
-    link = f"{settings.FRONTEND_URL}/auth/verify?token={token}"
+    link = f"{settings.FRONTEND_URL}/auth/landing?token={token}"
 
     if not settings.RESEND_API_KEY:
         logger.warning("RESEND_API_KEY not set — magic link printed to console (dev only)")

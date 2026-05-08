@@ -14,7 +14,7 @@ from app.core.security import (
     decode_token,
 )
 from app.models.user import User
-from app.schemas.auth import MagicLinkRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import MagicLinkRequest, RefreshRequest, TokenResponse, VerifyRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,15 +31,15 @@ async def send_link(
     return {"message": "Magic link sent. Check your email."}
 
 
-@router.get("/verify", response_model=TokenResponse)
+@router.post("/verify", response_model=TokenResponse)
 @limiter.limit("20/minute")
 async def verify(
     request: Request,
-    token: str,
+    body: VerifyRequest,
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        email = decode_token(token, "magic")
+        email = decode_token(body.token, "magic")
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
