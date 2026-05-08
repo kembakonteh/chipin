@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_arq, get_current_user
 from app.core.email import send_payment_confirmation_email
 from app.models.campaign import Campaign, CampaignStatus, CampaignType
@@ -198,13 +198,10 @@ async def initiate_payment(
 # ---------------------------------------------------------------------------
 
 @router.post("/webhooks/stripe", status_code=status.HTTP_200_OK)
-async def stripe_webhook(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    arq=Depends(get_arq),
-):
-    # Log before any processing so this always appears regardless of what follows
-    logger.info(
+async def stripe_webhook(request: Request):
+    # This fires before any DB/ARQ dependency resolution — if this never appears
+    # in logs, the request is not reaching this function at all.
+    logger.warning(
         "Stripe webhook: request received (content-length=%s sig-present=%s)",
         request.headers.get("content-length", "?"),
         bool(request.headers.get("stripe-signature")),
@@ -220,37 +217,40 @@ async def stripe_webhook(
     except stripe.SignatureVerificationError as exc:
         logger.warning("Stripe webhook: signature verification failed — %s", exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature")
-    except Exception as exc:
+    except Exception:
         logger.exception("Stripe webhook: failed to parse event")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed event")
 
     event_type = event["type"]
     obj = event["data"]["object"]
 
-    logger.info("Stripe webhook: verified event %s (id=%s)", event_type, event.get("id"))
+    logger.warning("Stripe webhook: verified event %s (id=%s)", event_type, event.get("id"))
 
-    try:
-        if event_type == "checkout.session.completed":
-            metadata = obj.get("metadata", {})
-            if metadata.get("susu_contribution_id"):
-                await _handle_susu_checkout_completed(obj, db)
+    # Resolve DB and ARQ here so the entry log above always fires first
+    arq = request.app.state.arq
+    async with AsyncSessionLocal() as db:
+        try:
+            if event_type == "checkout.session.completed":
+                metadata = obj.get("metadata", {})
+                if metadata.get("susu_contribution_id"):
+                    await _handle_susu_checkout_completed(obj, db)
+                else:
+                    await _handle_checkout_completed(obj, db, arq)
+
+            elif event_type == "payment_intent.payment_failed":
+                await _handle_payment_failed(obj, db)
+
+            elif event_type == "charge.refunded":
+                await _handle_charge_refunded(obj, db)
+
             else:
-                await _handle_checkout_completed(obj, db, arq)
-
-        elif event_type == "payment_intent.payment_failed":
-            await _handle_payment_failed(obj, db)
-
-        elif event_type == "charge.refunded":
-            await _handle_charge_refunded(obj, db)
-
-        else:
-            logger.info("Stripe webhook: unhandled event type %s", event_type)
-    except Exception:
-        logger.exception("Stripe webhook: unhandled exception processing %s", event_type)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Webhook processing error",
-        )
+                logger.info("Stripe webhook: unhandled event type %s", event_type)
+        except Exception:
+            logger.exception("Stripe webhook: unhandled exception processing %s", event_type)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Webhook processing error",
+            )
 
     return {"received": True}
 
