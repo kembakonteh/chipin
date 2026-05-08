@@ -203,6 +203,13 @@ async def stripe_webhook(
     db: AsyncSession = Depends(get_db),
     arq=Depends(get_arq),
 ):
+    # Log before any processing so this always appears regardless of what follows
+    logger.info(
+        "Stripe webhook: request received (content-length=%s sig-present=%s)",
+        request.headers.get("content-length", "?"),
+        bool(request.headers.get("stripe-signature")),
+    )
+
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
@@ -210,32 +217,40 @@ async def stripe_webhook(
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
         )
-    except stripe.SignatureVerificationError:
+    except stripe.SignatureVerificationError as exc:
+        logger.warning("Stripe webhook: signature verification failed — %s", exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature")
     except Exception as exc:
-        logger.error("Webhook parse error: %s", exc)
+        logger.exception("Stripe webhook: failed to parse event")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed event")
 
     event_type = event["type"]
     obj = event["data"]["object"]
 
-    logger.info("Stripe webhook received: %s (id=%s)", event_type, event.get("id"))
+    logger.info("Stripe webhook: verified event %s (id=%s)", event_type, event.get("id"))
 
-    if event_type == "checkout.session.completed":
-        metadata = obj.get("metadata", {})
-        if metadata.get("susu_contribution_id"):
-            await _handle_susu_checkout_completed(obj, db)
+    try:
+        if event_type == "checkout.session.completed":
+            metadata = obj.get("metadata", {})
+            if metadata.get("susu_contribution_id"):
+                await _handle_susu_checkout_completed(obj, db)
+            else:
+                await _handle_checkout_completed(obj, db, arq)
+
+        elif event_type == "payment_intent.payment_failed":
+            await _handle_payment_failed(obj, db)
+
+        elif event_type == "charge.refunded":
+            await _handle_charge_refunded(obj, db)
+
         else:
-            await _handle_checkout_completed(obj, db, arq)
-
-    elif event_type == "payment_intent.payment_failed":
-        await _handle_payment_failed(obj, db)
-
-    elif event_type == "charge.refunded":
-        await _handle_charge_refunded(obj, db)
-
-    else:
-        logger.info("Unhandled Stripe event: %s", event_type)
+            logger.info("Stripe webhook: unhandled event type %s", event_type)
+    except Exception:
+        logger.exception("Stripe webhook: unhandled exception processing %s", event_type)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Webhook processing error",
+        )
 
     return {"received": True}
 
