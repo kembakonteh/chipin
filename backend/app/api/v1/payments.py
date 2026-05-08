@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_arq, get_current_user
+from app.core.email import send_payment_confirmation_email
 from app.models.campaign import Campaign, CampaignStatus, CampaignType
 from app.models.contributor import Contributor, PaidVia
 from app.models.payment import Payment, PaymentStatus
@@ -93,6 +94,7 @@ async def initiate_payment(
     contributor = existing.scalar_one_or_none()
     if contributor:
         contributor.is_anonymous = is_anonymous
+        contributor.amount = gross_amount
         if body.message is not None:
             contributor.message = body.message.strip() or None
     else:
@@ -107,6 +109,24 @@ async def initiate_payment(
         )
         db.add(contributor)
         await db.flush()  # get contributor.id before Stripe call
+
+    # Delete any stale pending Payment rows for this contributor (e.g. abandoned sessions)
+    stale_result = await db.execute(
+        select(Payment).where(
+            Payment.campaign_id == campaign.id,
+            Payment.contributor_id == contributor.id,
+            Payment.status == PaymentStatus.pending,
+        )
+    )
+    for stale in stale_result.scalars().all():
+        if stale.stripe_checkout_session_id:
+            try:
+                await asyncio.to_thread(
+                    stripe.checkout.Session.expire, stale.stripe_checkout_session_id
+                )
+            except stripe.StripeError:
+                pass  # already expired or completed — safe to ignore
+        await db.delete(stale)
 
     # Build Stripe Checkout Session params
     gross_cents = int(gross_amount * 100)
@@ -285,6 +305,19 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
             contributor.paid_via = PaidVia.card
 
     await db.commit()
+
+    # Send email receipt to contributor
+    if payment.payer_email:
+        campaign_obj = await db.get(Campaign, payment.campaign_id)
+        if campaign_obj:
+            await send_payment_confirmation_email(
+                email=payment.payer_email,
+                payer_name=payment.payer_name or "Contributor",
+                amount=payment.gross_amount,
+                currency=payment.currency,
+                campaign_title=campaign_obj.title,
+                campaign_slug=campaign_obj.slug,
+            )
 
     # Enqueue async notifications
     if payment.contributor_id:
