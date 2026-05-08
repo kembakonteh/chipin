@@ -199,14 +199,6 @@ async def initiate_payment(
 
 @router.post("/webhooks/stripe", status_code=status.HTTP_200_OK)
 async def stripe_webhook(request: Request):
-    # This fires before any DB/ARQ dependency resolution — if this never appears
-    # in logs, the request is not reaching this function at all.
-    logger.warning(
-        "Stripe webhook: request received (content-length=%s sig-present=%s)",
-        request.headers.get("content-length", "?"),
-        bool(request.headers.get("stripe-signature")),
-    )
-
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
@@ -226,7 +218,6 @@ async def stripe_webhook(request: Request):
 
     logger.warning("Stripe webhook: verified event %s (id=%s)", event_type, event.get("id"))
 
-    # Resolve DB and ARQ here so the entry log above always fires first
     arq = request.app.state.arq
     async with AsyncSessionLocal() as db:
         try:
@@ -257,7 +248,6 @@ async def stripe_webhook(request: Request):
 
 async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -> None:
     session_id = session_obj["id"]
-    logger.info("_handle_checkout_completed: processing session %s", session_id)
     result = await db.execute(
         select(Payment).where(Payment.stripe_checkout_session_id == session_id)
     )
@@ -328,10 +318,6 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
     if payment.payer_email:
         campaign_obj = await db.get(Campaign, payment.campaign_id)
         if campaign_obj:
-            logger.info(
-                "Sending payment confirmation email to %s for campaign '%s'",
-                payment.payer_email, campaign_obj.title,
-            )
             await send_payment_confirmation_email(
                 email=payment.payer_email,
                 payer_name=payment.payer_name or "Contributor",
