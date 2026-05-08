@@ -314,17 +314,27 @@ async def remind_all(
     """Enqueue a WhatsApp reminder blast for all unpaid contributors."""
     campaign = await _get_campaign_or_404(slug, current_user.id, db)
 
-    result = await db.execute(
+    total_result = await db.execute(
+        select(func.count()).where(
+            Contributor.campaign_id == campaign.id,
+            Contributor.paid.is_(False),
+        )
+    )
+    total_unpaid = total_result.scalar_one()
+
+    phone_result = await db.execute(
         select(func.count()).where(
             Contributor.campaign_id == campaign.id,
             Contributor.paid.is_(False),
             Contributor.phone.isnot(None),
         )
     )
-    queued = min(result.scalar_one(), 50)
+    with_phone = phone_result.scalar_one()
+    queued = min(with_phone, 50)
+    skipped = total_unpaid - with_phone
 
     await arq.enqueue_job("send_reminder_blast", campaign_id=str(campaign.id))
-    return {"queued": queued}
+    return {"queued": queued, "skipped": skipped}
 
 
 # --- Printable QR collection card ---

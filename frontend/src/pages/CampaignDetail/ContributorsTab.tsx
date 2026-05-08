@@ -87,25 +87,40 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
     addMutation.mutate()
   }
 
+  const remindOneMutation = useMutation({
+    mutationFn: (c: Contributor) =>
+      api.post(`/campaigns/${campaign.slug}/contributors/${c.id}/remind`).then(r => r.data),
+    onSuccess: (_data, c) => toast.success(`Reminder queued for ${c.name.split(' ')[0]}`),
+    onError: (_err, c) => toast.error(`Failed to remind ${c.name.split(' ')[0]}`),
+  })
+
   function handleReminder(c: Contributor) {
-    if (c.phone) {
-      const msg = `Hi ${c.name.split(' ')[0]}! Just a reminder to chip in for "${campaign.title}". Thanks 💚`
-      window.open(`https://wa.me/${c.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank')
-    } else {
+    if (!c.phone) {
       toast(`No phone number for ${c.name}`, { icon: 'ℹ️' })
+      return
     }
+    remindOneMutation.mutate(c)
   }
 
   const remindAllMutation = useMutation({
     mutationFn: () =>
-      api.post<{ queued: number }>(`/campaigns/${campaign.slug}/remind-all`).then(r => r.data),
-    onSuccess: (data) =>
-      toast.success(`Reminder queued for ${data.queued} contributor${data.queued !== 1 ? 's' : ''}`),
+      api.post<{ queued: number; skipped: number }>(`/campaigns/${campaign.slug}/remind-all`).then(r => r.data),
+    onSuccess: (data) => {
+      const sent = `${data.queued} reminder${data.queued !== 1 ? 's' : ''} sent`
+      const msg = data.skipped > 0 ? `${sent}, ${data.skipped} skipped (no phone number)` : sent
+      toast.success(msg)
+    },
     onError: () => toast.error('Failed to send reminders'),
   })
 
   return (
     <div className="space-y-4">
+      {/* WhatsApp info banner */}
+      <div className="flex items-start gap-2.5 rounded-lg border border-sky-900/50 bg-sky-950/30 px-3.5 py-2.5 text-xs text-sky-300/80">
+        <span className="shrink-0 mt-px">📱</span>
+        <span>Contributors are notified via WhatsApp. Make sure phone numbers are saved for each contributor to enable reminders.</span>
+      </div>
+
       {/* Actions bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-gray-400">
