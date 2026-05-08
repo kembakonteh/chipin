@@ -56,6 +56,30 @@ services:
       - chipin-internal
       - kafotech-shared
 
+  chipin-worker:
+    build: ./backend
+    command: python -m arq app.workers.main.WorkerSettings
+    volumes:
+      - ./backend:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://chipin:chipinpass2026@chipin-db:5432/chipin
+      REDIS_URL: redis://chipin-redis:6379/0
+      SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
+      ACCESS_TOKEN_EXPIRE_MINUTES: 480
+      META_WHATSAPP_TOKEN: ""
+      META_PHONE_NUMBER_ID: ""
+      FRONTEND_URL: "https://chipin.kafotech.io"
+      STRIPE_SECRET_KEY: "sk_test_REPLACE_WITH_YOUR_KEY"
+      STRIPE_WEBHOOK_SECRET: "whsec_REPLACE_WITH_YOUR_KEY"
+    depends_on:
+      chipin-db:
+        condition: service_healthy
+      chipin-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chipin-internal
+
   chipin-frontend:
     build: ./frontend
     command: npm run dev -- --host 0.0.0.0
