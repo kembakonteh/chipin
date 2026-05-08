@@ -171,19 +171,6 @@ async def send_payment_reminder(ctx: dict, *, contributor_id: str) -> None:
             )
             return
 
-        paid_result = await db.execute(
-            select(func.count()).where(
-                Contributor.campaign_id == campaign.id,
-                Contributor.paid.is_(True),
-            )
-        )
-        paid_count = paid_result.scalar_one()
-
-        total_result = await db.execute(
-            select(func.count()).where(Contributor.campaign_id == campaign.id)
-        )
-        total_count = total_result.scalar_one()
-
         public_url = f"{settings.FRONTEND_URL}/p/{campaign.slug}"
 
         await _send_template(
@@ -192,8 +179,6 @@ async def send_payment_reminder(ctx: dict, *, contributor_id: str) -> None:
             params=[
                 contributor.name,
                 campaign.title,
-                str(paid_count),
-                str(total_count),
                 public_url,
             ],
         )
