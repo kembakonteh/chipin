@@ -31,8 +31,8 @@ class Payment(Base, UUIDMixin, TimestampMixin):
     contributor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("contributors.id", ondelete="SET NULL"), nullable=True
     )
-    stripe_payment_intent_id: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False
+    stripe_payment_intent_id: Mapped[Optional[str]] = mapped_column(
+        String(255), unique=True, nullable=True
     )
     stripe_checkout_session_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

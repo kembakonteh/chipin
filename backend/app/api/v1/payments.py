@@ -177,7 +177,7 @@ async def initiate_payment(
     payment = Payment(
         campaign_id=campaign.id,
         contributor_id=contributor.id,
-        stripe_payment_intent_id=session.payment_intent,
+        stripe_payment_intent_id=None,  # set from webhook after checkout.session.completed
         stripe_checkout_session_id=session.id,
         gross_amount=gross_amount,
         platform_fee=platform_fee,
