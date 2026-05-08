@@ -48,8 +48,12 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
       const a = document.createElement('a')
       a.href = url
       a.download = `${campaign.slug}-contributors.csv`
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Failed to export CSV')
     } finally {
       setExporting(false)
     }
@@ -92,18 +96,13 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
     }
   }
 
-  function handleRemindAll() {
-    const withPhone = unpaid.filter(c => c.phone)
-    if (withPhone.length === 0) {
-      toast('No unpaid contributors with a phone number', { icon: 'ℹ️' })
-      return
-    }
-    const msg = `Hi! Just a reminder to chip in for "${campaign.title}". Thanks 💚`
-    withPhone.forEach(c => {
-      window.open(`https://wa.me/${c.phone!.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank')
-    })
-    toast.success(`Opened WhatsApp for ${withPhone.length} contributor${withPhone.length > 1 ? 's' : ''}`)
-  }
+  const remindAllMutation = useMutation({
+    mutationFn: () =>
+      api.post<{ queued: number }>(`/campaigns/${campaign.slug}/remind-all`).then(r => r.data),
+    onSuccess: (data) =>
+      toast.success(`Reminder queued for ${data.queued} contributor${data.queued !== 1 ? 's' : ''}`),
+    onError: () => toast.error('Failed to send reminders'),
+  })
 
   return (
     <div className="space-y-4">
@@ -117,11 +116,12 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           {unpaid.length > 0 && (
             <button
               type="button"
-              onClick={handleRemindAll}
+              onClick={() => remindAllMutation.mutate()}
+              disabled={remindAllMutation.isPending}
               className="rounded-lg border border-green-800 bg-green-900/30 px-3 py-1.5 text-xs
-                font-medium text-green-300 hover:bg-green-800/50 transition-colors"
+                font-medium text-green-300 hover:bg-green-800/50 disabled:opacity-40 transition-colors"
             >
-              📱 Remind all unpaid
+              {remindAllMutation.isPending ? 'Sending…' : '📱 Remind all unpaid'}
             </button>
           )}
           <button
