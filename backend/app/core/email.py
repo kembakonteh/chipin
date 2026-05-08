@@ -58,10 +58,14 @@ async def send_payment_confirmation_email(
     campaign_title: str,
     campaign_slug: str,
 ) -> None:
+    logger.info(
+        "send_payment_confirmation_email: to=%s amount=%s campaign='%s' resend_key_set=%s",
+        email, _fmt_amount(amount, currency), campaign_title, bool(settings.RESEND_API_KEY),
+    )
+
     if not settings.RESEND_API_KEY:
-        logger.info(
-            "Payment confirmation (no Resend key) — %s paid %s to '%s'",
-            email, _fmt_amount(amount, currency), campaign_title,
+        logger.warning(
+            "RESEND_API_KEY not set — skipping payment confirmation email to %s", email
         )
         return
 
@@ -92,11 +96,12 @@ async def send_payment_confirmation_email(
     """
 
     try:
-        resend.Emails.send({
+        result = resend.Emails.send({
             "from": f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM}>",
             "to": [email],
             "subject": f"Payment received — {campaign_title}",
             "html": body,
         })
+        logger.info("Payment confirmation email sent to %s (resend_id=%s)", email, result.get("id") if isinstance(result, dict) else result)
     except Exception as exc:
         logger.error("Failed to send payment confirmation email to %s: %s", email, exc)

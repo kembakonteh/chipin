@@ -219,6 +219,8 @@ async def stripe_webhook(
     event_type = event["type"]
     obj = event["data"]["object"]
 
+    logger.info("Stripe webhook received: %s (id=%s)", event_type, event.get("id"))
+
     if event_type == "checkout.session.completed":
         metadata = obj.get("metadata", {})
         if metadata.get("susu_contribution_id"):
@@ -233,13 +235,14 @@ async def stripe_webhook(
         await _handle_charge_refunded(obj, db)
 
     else:
-        logger.debug("Unhandled Stripe event: %s", event_type)
+        logger.info("Unhandled Stripe event: %s", event_type)
 
     return {"received": True}
 
 
 async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -> None:
     session_id = session_obj["id"]
+    logger.info("_handle_checkout_completed: processing session %s", session_id)
     result = await db.execute(
         select(Payment).where(Payment.stripe_checkout_session_id == session_id)
     )
@@ -310,6 +313,10 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
     if payment.payer_email:
         campaign_obj = await db.get(Campaign, payment.campaign_id)
         if campaign_obj:
+            logger.info(
+                "Sending payment confirmation email to %s for campaign '%s'",
+                payment.payer_email, campaign_obj.title,
+            )
             await send_payment_confirmation_email(
                 email=payment.payer_email,
                 payer_name=payment.payer_name or "Contributor",
@@ -318,6 +325,16 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
                 campaign_title=campaign_obj.title,
                 campaign_slug=campaign_obj.slug,
             )
+        else:
+            logger.warning(
+                "checkout.session.completed: campaign %s not found, skipping email",
+                payment.campaign_id,
+            )
+    else:
+        logger.warning(
+            "checkout.session.completed: payment %s has no payer_email, skipping email",
+            payment.id,
+        )
 
     # Enqueue async notifications
     if payment.contributor_id:
