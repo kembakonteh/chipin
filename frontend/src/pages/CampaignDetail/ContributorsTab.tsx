@@ -15,6 +15,7 @@ type PaidVia = 'zelle' | 'cashapp' | 'cash' | 'card' | 'manual'
 
 interface AddForm {
   name: string
+  phone: string
   email: string
   amount: string
   is_anonymous: boolean
@@ -22,7 +23,7 @@ interface AddForm {
   note: string
 }
 
-const EMPTY_FORM: AddForm = { name: '', email: '', amount: '', is_anonymous: false, paid_via: null, note: '' }
+const EMPTY_FORM: AddForm = { name: '', phone: '', email: '', amount: '', is_anonymous: false, paid_via: null, note: '' }
 
 const PAY_METHODS: { value: PaidVia; label: string; icon: string }[] = [
   { value: 'zelle',   label: 'Zelle',    icon: '💜' },
@@ -66,6 +67,7 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
     mutationFn: () =>
       api.post<Contributor>(`/campaigns/${campaign.slug}/contributors`, {
         name: form.name.trim(),
+        phone: form.phone.trim() || null,
         email: form.email.trim() || null,
         amount: form.amount ? parseFloat(form.amount) : null,
         is_anonymous: form.is_anonymous,
@@ -184,6 +186,21 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
               className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white
                 placeholder-gray-600 focus:border-brand-500 focus:outline-none"
             />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm(p => ({ ...p, phone: e.target.value }))}
+              placeholder="+1 206 555 0100"
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white
+                placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+            />
+            <p className="mt-1.5 text-xs text-gray-500">
+              📱 Required for WhatsApp reminders — include country code
+            </p>
           </div>
 
           {/* Amount + anonymous */}

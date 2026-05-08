@@ -22,6 +22,7 @@ class ContributorCreate(BaseModel):
 
 class ContributorUpdate(BaseModel):
     name: Optional[str] = None
+    phone: Optional[str] = None
     amount: Optional[Decimal] = None
     paid_via: Optional[PaidVia] = None
     is_anonymous: Optional[bool] = None
