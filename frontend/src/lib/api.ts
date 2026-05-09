@@ -59,20 +59,32 @@ api.interceptors.request.use((config) => {
 
 let _refreshing: Promise<void> | null = null
 
+function _redirectToLogin() {
+  clearTokens()
+  window.location.replace('/login')
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const orig: AxiosRequestConfig & { _retry?: boolean } = err.config ?? {}
+
+    // The refresh call itself returned 401 — bail out immediately.
+    // Without this guard, the interceptor would fire for the refresh sub-request,
+    // see _refreshing is already non-null, then `await _refreshing` — deadlocking
+    // because it's waiting for the promise that's waiting for it.
+    if (err.response?.status === 401 && orig.url?.includes('/auth/refresh')) {
+      _redirectToLogin()
+      return Promise.reject(err)
+    }
+
     if (err.response?.status === 401 && !orig._retry && _refresh) {
       orig._retry = true
       if (!_refreshing) {
         _refreshing = api
           .post('/auth/refresh', { refresh_token: _refresh })
           .then(({ data }) => setTokens(data.access_token, data.refresh_token))
-          .catch(() => {
-            clearTokens()
-            window.location.replace('/login')
-          })
+          .catch(() => _redirectToLogin())
           .finally(() => { _refreshing = null })
       }
       await _refreshing
@@ -81,9 +93,9 @@ api.interceptors.response.use(
         return api(orig)
       }
     }
-    if (err.response?.status === 401 && !orig._retry) {
-      clearTokens()
-      window.location.replace('/login')
+
+    if (err.response?.status === 401) {
+      _redirectToLogin()
     }
     return Promise.reject(err)
   },
