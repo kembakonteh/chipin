@@ -40,7 +40,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://chipin:chipinpass2026@chipin-db:5432/chipin
       REDIS_URL: redis://chipin-redis:6379/0
       SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
-      ACCESS_TOKEN_EXPIRE_MINUTES: 480
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
       ALLOWED_ORIGINS: "https://chipin.kafotech.io"
       STRIPE_SECRET_KEY: "sk_test_REPLACE_WITH_YOUR_KEY"
       STRIPE_WEBHOOK_SECRET: "whsec_REPLACE_WITH_YOUR_KEY"
@@ -65,7 +65,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://chipin:chipinpass2026@chipin-db:5432/chipin
       REDIS_URL: redis://chipin-redis:6379/0
       SECRET_KEY: changethis_chipin_production_64chars_minimum_secret_key_here
-      ACCESS_TOKEN_EXPIRE_MINUTES: 480
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
       META_WHATSAPP_TOKEN: ""
       META_PHONE_NUMBER_ID: ""
       FRONTEND_URL: "https://chipin.kafotech.io"

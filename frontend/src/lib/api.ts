@@ -8,21 +8,44 @@ export const api = axios.create({ baseURL: BASE_URL, withCredentials: true })
 const ACCESS_KEY = 'chipin_access'
 const REFRESH_KEY = 'chipin_refresh'
 
-let _access: string | null = localStorage.getItem(ACCESS_KEY)
-let _refresh: string | null = localStorage.getItem(REFRESH_KEY)
+// localStorage can throw in private-browsing mode on iOS/Android and in some
+// sandboxed WebViews. All reads and writes are wrapped so a storage failure
+// never causes a blank screen — the user just ends up unauthenticated.
+function storageSafeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function storageSafeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch { /* ignore */ }
+}
+
+function storageSafeRemove(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch { /* ignore */ }
+}
+
+let _access: string | null = storageSafeGet(ACCESS_KEY)
+let _refresh: string | null = storageSafeGet(REFRESH_KEY)
 
 export function setTokens(access: string, refresh: string): void {
   _access = access
   _refresh = refresh
-  localStorage.setItem(ACCESS_KEY, access)
-  localStorage.setItem(REFRESH_KEY, refresh)
+  storageSafeSet(ACCESS_KEY, access)
+  storageSafeSet(REFRESH_KEY, refresh)
 }
 
 export function clearTokens(): void {
   _access = null
   _refresh = null
-  localStorage.removeItem(ACCESS_KEY)
-  localStorage.removeItem(REFRESH_KEY)
+  storageSafeRemove(ACCESS_KEY)
+  storageSafeRemove(REFRESH_KEY)
 }
 
 export function hasTokens(): boolean {
@@ -54,7 +77,7 @@ api.interceptors.response.use(
       }
       await _refreshing
       if (_access) {
-        orig.headers = { ...orig.headers, Authorization: `Bearer ${_access}` }
+        orig.headers = { ...(orig.headers as Record<string, unknown>), Authorization: `Bearer ${_access}` }
         return api(orig)
       }
     }
