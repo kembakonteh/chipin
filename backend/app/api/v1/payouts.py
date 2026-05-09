@@ -6,7 +6,7 @@ Payout endpoints:
   POST /campaigns/{slug}/payout
   GET  /campaigns/{slug}/payouts
 """
-import random
+import secrets
 import uuid
 from decimal import Decimal
 from typing import List
@@ -82,7 +82,7 @@ async def add_payout_method(
     await db.refresh(method)
 
     # Generate 6-digit verification code, cache in Redis for 10 min
-    code = str(random.randint(100_000, 999_999))
+    code = str(secrets.randbelow(900_000) + 100_000)
     redis = await get_redis()
     await redis.set(f"chipin:payout-verify:{method.id}", code, ex=_VERIFY_TTL)
 

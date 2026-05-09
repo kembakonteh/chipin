@@ -256,6 +256,10 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
         logger.warning("checkout.session.completed: no Payment found for session %s", session_id)
         return
 
+    if payment.status == PaymentStatus.succeeded:
+        logger.info("checkout.session.completed: payment %s already succeeded — skipping (idempotent)", session_id)
+        return
+
     # Update payment intent ID (confirmed from Stripe)
     pi_id = session_obj.get("payment_intent")
     if pi_id:

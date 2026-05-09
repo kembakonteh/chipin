@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 from app.core.config import settings
 
@@ -39,7 +40,7 @@ def decode_token(token: str, expected_type: TokenType) -> str:
     """Decode and validate a JWT. Returns the subject (email or user_id) or raises ValueError."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError as exc:
+    except InvalidTokenError as exc:
         raise ValueError(str(exc)) from exc
     if payload.get("type") != expected_type:
         raise ValueError("Invalid token type")

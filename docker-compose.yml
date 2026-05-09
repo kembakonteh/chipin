@@ -14,6 +14,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - chipin-internal
 
@@ -26,16 +32,32 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - chipin-internal
 
   chipin-backend:
     build: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'
     ports:
       - "8003:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@chipin-db:5432/${POSTGRES_DB}
       REDIS_URL: redis://chipin-redis:6379/0
@@ -68,8 +90,6 @@ services:
   chipin-worker:
     build: ./backend
     command: python -m arq app.workers.main.WorkerSettings
-    volumes:
-      - ./backend:/app
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@chipin-db:5432/${POSTGRES_DB}
       REDIS_URL: redis://chipin-redis:6379/0
@@ -86,19 +106,33 @@ services:
       chipin-redis:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - chipin-internal
 
   chipin-frontend:
-    build: ./frontend
-    command: npm run dev -- --host 0.0.0.0
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: https://chipin.kafotech.io/api/v1
     ports:
-      - "5176:5173"
-    environment:
-      VITE_API_URL: ${FRONTEND_URL}/api/v1
+      - "5176:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - chipin-backend
     labels:
@@ -106,10 +140,35 @@ services:
       - "traefik.http.routers.chipin.rule=Host(`chipin.kafotech.io`)"
       - "traefik.http.routers.chipin.entrypoints=websecure"
       - "traefik.http.routers.chipin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.chipin.loadbalancer.server.port=5173"
+      - "traefik.http.services.chipin.loadbalancer.server.port=80"
     networks:
       - chipin-internal
       - web
+
+  chipin-db-backup:
+    image: prodrigestivill/postgres-backup-local:15
+    environment:
+      POSTGRES_HOST: chipin-db
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: "7"
+      BACKUP_KEEP_WEEKS: "0"
+      BACKUP_KEEP_MONTHS: "0"
+    volumes:
+      - chipin_db_backups:/backups
+    depends_on:
+      chipin-db:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - chipin-internal
 
 networks:
   chipin-internal:
@@ -120,3 +179,4 @@ networks:
 
 volumes:
   chipin_postgres_data:
+  chipin_db_backups:

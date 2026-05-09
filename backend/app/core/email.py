@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from decimal import Decimal
 
@@ -41,7 +42,7 @@ async def send_magic_link(email: str, token: str) -> None:
     </div>
     """
 
-    resend.Emails.send({
+    await asyncio.to_thread(resend.Emails.send, {
         "from": f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM}>",
         "to": [email],
         "subject": "Your ChipIn login link",
@@ -91,7 +92,7 @@ async def send_payment_confirmation_email(
     """
 
     try:
-        resend.Emails.send({
+        await asyncio.to_thread(resend.Emails.send, {
             "from": f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM}>",
             "to": [email],
             "subject": f"Payment received — {campaign_title}",
