@@ -36,7 +36,7 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    allowedHosts: ['chipin.kafotech.io'],
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://chipin-backend:8000',
