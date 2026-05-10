@@ -145,6 +145,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
       }).then(r => r.data),
     onSuccess: (campaign) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] })
+      qc.invalidateQueries({ queryKey: ['org-campaigns'] })
       toast.success('Campaign created!')
       setCreatedCampaign(campaign)
       if (campaign.campaign_type === 'memorial' || campaign.campaign_type === 'charity') {
