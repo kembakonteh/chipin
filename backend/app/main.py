@@ -11,6 +11,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.limiter import limiter
+from app.core.middleware import LimitBodySizeMiddleware
 from app.core.redis_client import close_redis, get_redis
 from app.core.seed import seed_templates
 
@@ -46,6 +47,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Body size limit — runs outermost (added last), exempt paths bypass the check
+app.add_middleware(LimitBodySizeMiddleware)
 
 app.include_router(api_router)
 
