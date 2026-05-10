@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
@@ -71,8 +71,8 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   const qc = useQueryClient()
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo(0, 0)
+  useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
   }, [step])
 
   const { data: templates = [] } = useQuery<CampaignTemplate[]>({
@@ -197,12 +197,15 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
 
   return (
     <div
-      ref={scrollRef}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4
-        bg-black/70 backdrop-blur-sm overflow-y-auto"
+        bg-black/70 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-lg rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl my-4">
+      <div
+        ref={scrollRef}
+        className="w-full max-w-lg rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl my-4
+          max-h-[calc(100svh-2rem)] overflow-y-auto"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-800">
