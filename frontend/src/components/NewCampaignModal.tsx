@@ -69,10 +69,14 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   const [createdCampaign, setCreatedCampaign] = useState<Campaign | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const qc = useQueryClient()
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0
+    if (overlayRef.current) overlayRef.current.scrollTop = 0
+    if (cardRef.current) cardRef.current.scrollTop = 0
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
   }, [step])
 
   const { data: templates = [] } = useQuery<CampaignTemplate[]>({
@@ -197,14 +201,15 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
 
   return (
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4
-        bg-black/70 backdrop-blur-sm"
+        bg-black/70 backdrop-blur-sm overflow-y-auto"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        ref={scrollRef}
+        ref={cardRef}
         className="w-full max-w-lg rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl my-4
-          max-h-[calc(100svh-2rem)] overflow-y-auto"
+          max-h-[85vh] overflow-y-auto"
       >
 
         {/* Header */}
@@ -281,6 +286,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               <div className="flex-1">
                 <label className="block text-xs text-gray-400 mb-1">Title <span className="text-red-400">*</span></label>
                 <input
+                  autoFocus
                   value={form.title}
                   onChange={e => setF('title', e.target.value)}
                   placeholder="e.g. Sunday League Fund"
