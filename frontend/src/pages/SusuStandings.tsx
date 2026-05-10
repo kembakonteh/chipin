@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
@@ -30,7 +29,6 @@ function ReliabilityBar({ pct }: { pct: number | null }) {
 
 export default function SusuStandings() {
   const { slug } = useParams<{ slug: string }>()
-  const [selectedMember, setSelectedMember] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery<SusuStandingsData>({
     queryKey: ['susu-standings', slug],
