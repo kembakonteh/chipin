@@ -52,9 +52,12 @@ export default function Login() {
             <div className="text-center py-2">
               <span className="text-4xl block mb-4">📬</span>
               <h2 className="text-lg font-semibold text-white mb-2">Check your email</h2>
-              <p className="text-sm text-gray-400 mb-4">
+              <p className="text-sm text-gray-400 mb-2">
                 We sent a magic link to <span className="text-brand-300">{email}</span>.
                 Click it to sign in.
+              </p>
+              <p className="text-xs text-gray-600 mb-4">
+                Don't see it? Check your spam or junk folder. The email comes from noreply@kafotech.io
               </p>
 
               {/* Dev fallback: show clickable link when SMTP isn't configured */}
