@@ -51,6 +51,12 @@ export default function SusuCreatePage() {
   const [lateFee, setLateFee] = useState('')
   // Feature 8: group rules
   const [rules, setRules] = useState('')
+  // Payment method settings
+  const [allowCard, setAllowCard] = useState(true)
+  const [allowCashapp, setAllowCashapp] = useState(false)
+  const [allowZelle, setAllowZelle] = useState(false)
+  const [cashappHandle, setCashappHandle] = useState('')
+  const [zelleHandle, setZelleHandle] = useState('')
 
   // Members — collected on step 1 alongside group details
   const [members, setMembers] = useState<MemberRow[]>([emptyMember(), emptyMember()])
@@ -74,6 +80,11 @@ export default function SusuCreatePage() {
         missed_policy: missedPolicy,
         late_fee_pct: lateFee ? parseFloat(lateFee) : null,
         rules: rules.trim() || null,
+        allow_card: allowCard,
+        allow_cashapp: allowCashapp,
+        allow_zelle: allowZelle,
+        cashapp_handle: cashappHandle.trim() || null,
+        zelle_handle: zelleHandle.trim() || null,
       }).then(getData)
       setGroup(g)
 
@@ -273,6 +284,47 @@ export default function SusuCreatePage() {
                     />
                     <span className="text-sm text-gray-400">% late fee</span>
                   </div>
+                )}
+              </div>
+
+              {/* Payment method settings */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">Payment Methods</label>
+                <p className="text-xs text-gray-600 mb-2">Which methods can members use to pay their contribution?</p>
+                <div className="space-y-2 mb-3">
+                  {[
+                    { key: 'card', label: 'Card (Stripe)', icon: '💳', value: allowCard, set: setAllowCard },
+                    { key: 'cashapp', label: 'CashApp', icon: '💚', value: allowCashapp, set: setAllowCashapp },
+                    { key: 'zelle', label: 'Zelle', icon: '🔵', value: allowZelle, set: setAllowZelle },
+                  ].map(m => (
+                    <label key={m.key} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={m.value}
+                        onChange={e => m.set(e.target.checked)}
+                        className="w-4 h-4 accent-brand-500"
+                      />
+                      <span className="text-sm text-gray-200">{m.icon} {m.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {allowCashapp && (
+                  <input
+                    type="text"
+                    value={cashappHandle}
+                    onChange={e => setCashappHandle(e.target.value)}
+                    placeholder="Your $cashtag"
+                    className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none mb-2"
+                  />
+                )}
+                {allowZelle && (
+                  <input
+                    type="text"
+                    value={zelleHandle}
+                    onChange={e => setZelleHandle(e.target.value)}
+                    placeholder="Zelle phone or email"
+                    className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
                 )}
               </div>
 

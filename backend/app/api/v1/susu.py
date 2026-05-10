@@ -52,6 +52,9 @@ from app.schemas.susu import (
     SusuMemberResponse,
     SusuMemberStanding,
     SusuMemberUpdate,
+    SusuOfflinePayRequest,
+    SusuPaymentSettingsUpdate,
+    SusuPayPageInfo,
     SusuStandingsResponse,
 )
 
@@ -167,6 +170,11 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
         missed_policy=group.missed_policy,
         late_fee_pct=group.late_fee_pct,
         rules=group.rules,
+        allow_card=group.allow_card,
+        allow_cashapp=group.allow_cashapp,
+        allow_zelle=group.allow_zelle,
+        cashapp_handle=group.cashapp_handle,
+        zelle_handle=group.zelle_handle,
         members=members,
         current_cycle_detail=current_cycle_detail,
         cycle_summaries=summaries,
@@ -208,6 +216,11 @@ async def create_susu_group(
         missed_policy=body.missed_policy,
         late_fee_pct=body.late_fee_pct,
         rules=body.rules,
+        allow_card=body.allow_card,
+        allow_cashapp=body.allow_cashapp,
+        allow_zelle=body.allow_zelle,
+        cashapp_handle=body.cashapp_handle,
+        zelle_handle=body.zelle_handle,
     )
     db.add(group)
     await db.commit()
@@ -1109,6 +1122,245 @@ async def reject_join_request(
     await db.commit()
     await db.refresh(join_req)
     return join_req
+
+
+# ---------------------------------------------------------------------------
+# PATCH /susu/{slug}/settings — update payment method settings (organizer)
+# ---------------------------------------------------------------------------
+
+@router.patch("/susu/{slug}/settings", response_model=SusuGroupResponse)
+async def update_susu_settings(
+    slug: str,
+    body: SusuPaymentSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    for k, v in body.model_dump(exclude_unset=True).items():
+        setattr(group, k, v)
+
+    # Ensure at least one payment method is enabled
+    if not group.allow_card and not group.allow_cashapp and not group.allow_zelle:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one payment method must be enabled")
+
+    await db.commit()
+    await db.refresh(group)
+    return group
+
+
+# ---------------------------------------------------------------------------
+# GET /s/{slug}/pay/{member_id} — public payment page info
+# ---------------------------------------------------------------------------
+
+@public_router.get("/s/{slug}/pay/{member_id}", response_model=SusuPayPageInfo)
+async def get_susu_pay_info(
+    slug: str,
+    member_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.status != SusuStatus.active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Group is not currently active")
+
+    member_result = await db.execute(
+        select(SusuMember).where(SusuMember.id == member_id, SusuMember.group_id == group.id)
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    cycle_result = await db.execute(
+        select(SusuCycle).where(SusuCycle.group_id == group.id, SusuCycle.cycle_number == group.current_cycle)
+    )
+    cycle = cycle_result.scalar_one_or_none()
+    if not cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Current cycle not found")
+
+    contrib_result = await db.execute(
+        select(SusuContribution).where(
+            SusuContribution.cycle_id == cycle.id,
+            SusuContribution.member_id == member.id,
+        )
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    already_paid = contrib.paid if contrib else False
+    amount = contrib.amount if contrib else member.slots * group.contribution_amount
+
+    return SusuPayPageInfo(
+        group_name=group.name,
+        slug=group.slug,
+        member_id=str(member.id),
+        member_name=member.name,
+        cycle_number=group.current_cycle,
+        amount=amount,
+        already_paid=already_paid,
+        allow_card=group.allow_card,
+        allow_cashapp=group.allow_cashapp,
+        allow_zelle=group.allow_zelle,
+        cashapp_handle=group.cashapp_handle,
+        zelle_handle=group.zelle_handle,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /s/{slug}/pay/{member_id}/stripe — public Stripe checkout per member
+# ---------------------------------------------------------------------------
+
+@public_router.post("/s/{slug}/pay/{member_id}/stripe", response_model=SusuCheckoutResponse, status_code=status.HTTP_201_CREATED)
+async def susu_member_stripe_pay(
+    slug: str,
+    member_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SusuGroup).options(selectinload(SusuGroup.owner)).where(SusuGroup.slug == slug)
+    )
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.status != SusuStatus.active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Group is not currently active")
+    if not group.allow_card:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Card payments are not enabled for this group")
+
+    member_result = await db.execute(
+        select(SusuMember).where(SusuMember.id == member_id, SusuMember.group_id == group.id)
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    cycle_result = await db.execute(
+        select(SusuCycle).where(SusuCycle.group_id == group.id, SusuCycle.cycle_number == group.current_cycle)
+    )
+    cycle = cycle_result.scalar_one_or_none()
+    if not cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Current cycle not found")
+
+    contrib_result = await db.execute(
+        select(SusuContribution).where(
+            SusuContribution.cycle_id == cycle.id,
+            SusuContribution.member_id == member.id,
+        )
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No contribution record for this member")
+    if contrib.paid:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
+
+    amount_cents = int(member.slots * group.contribution_amount * 100)
+    success_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}?paid=1"
+    cancel_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}"
+
+    session_params: dict = {
+        "mode": "payment",
+        "line_items": [{
+            "price_data": {
+                "currency": "usd",
+                "unit_amount": amount_cents,
+                "product_data": {
+                    "name": f"{group.name} — Cycle {group.current_cycle} contribution",
+                    "description": f"Susu contribution for {member.name}",
+                },
+            },
+            "quantity": 1,
+        }],
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "metadata": {
+            "susu_contribution_id": str(contrib.id),
+            "susu_group_id": str(group.id),
+            "susu_member_id": str(member.id),
+        },
+    }
+    if member.email:
+        session_params["customer_email"] = member.email
+
+    try:
+        session = await asyncio.to_thread(stripe.checkout.Session.create, **session_params)
+    except stripe.StripeError as exc:
+        logger.error("Stripe error for susu %s member %s: %s", slug, member_id, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Payment provider error")
+
+    contrib.stripe_payment_intent_id = session.payment_intent
+    await db.commit()
+
+    return SusuCheckoutResponse(checkout_url=session.url)
+
+
+# ---------------------------------------------------------------------------
+# POST /s/{slug}/pay/{member_id}/offline — public offline payment notification
+# ---------------------------------------------------------------------------
+
+@public_router.post("/s/{slug}/pay/{member_id}/offline")
+async def susu_member_offline_pay(
+    slug: str,
+    member_id: uuid.UUID,
+    body: SusuOfflinePayRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.status != SusuStatus.active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Group is not currently active")
+
+    if body.paid_via == SusuPaidVia.cashapp and not group.allow_cashapp:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CashApp payments are not enabled for this group")
+    if body.paid_via == SusuPaidVia.zelle and not group.allow_zelle:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zelle payments are not enabled for this group")
+
+    member_result = await db.execute(
+        select(SusuMember).where(SusuMember.id == member_id, SusuMember.group_id == group.id)
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    cycle_result = await db.execute(
+        select(SusuCycle).where(SusuCycle.group_id == group.id, SusuCycle.cycle_number == group.current_cycle)
+    )
+    cycle = cycle_result.scalar_one_or_none()
+    if not cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Current cycle not found")
+
+    contrib_result = await db.execute(
+        select(SusuContribution).where(
+            SusuContribution.cycle_id == cycle.id,
+            SusuContribution.member_id == member.id,
+        )
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No contribution record for this member")
+    if contrib.paid:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
+
+    contrib.paid = True
+    contrib.paid_via = body.paid_via
+    contrib.paid_at = datetime.now(timezone.utc)
+    cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
+    member.total_contributed += contrib.amount
+
+    unpaid = await db.execute(
+        select(SusuContribution).where(SusuContribution.cycle_id == cycle.id, SusuContribution.paid == False)
+    )
+    if not unpaid.scalars().first():
+        cycle.status = SusuCycleStatus.collected
+
+    await db.commit()
+    return {"paid": True, "amount": str(contrib.amount), "paid_via": body.paid_via.value}
 
 
 # ---------------------------------------------------------------------------

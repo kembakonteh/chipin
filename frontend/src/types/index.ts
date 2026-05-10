@@ -78,6 +78,27 @@ export interface SusuGroup {
   late_fee_pct: string | null
   // Feature 8: group rules
   rules: string | null
+  // Payment method settings
+  allow_card: boolean
+  allow_cashapp: boolean
+  allow_zelle: boolean
+  cashapp_handle: string | null
+  zelle_handle: string | null
+}
+
+export interface SusuPayPageInfo {
+  group_name: string
+  slug: string
+  member_id: string
+  member_name: string
+  cycle_number: number
+  amount: string
+  already_paid: boolean
+  allow_card: boolean
+  allow_cashapp: boolean
+  allow_zelle: boolean
+  cashapp_handle: string | null
+  zelle_handle: string | null
 }
 
 export interface SusuDetail extends SusuGroup {

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
@@ -29,6 +30,7 @@ function ReliabilityBar({ pct }: { pct: number | null }) {
 
 export default function SusuStandings() {
   const { slug } = useParams<{ slug: string }>()
+  const [selectedMember, setSelectedMember] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery<SusuStandingsData>({
     queryKey: ['susu-standings', slug],
@@ -119,12 +121,20 @@ export default function SusuStandings() {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1">
                     <div className="text-sm font-semibold text-white">
                       {fmt(parseFloat(m.total_contributed))}
                     </div>
                     {m.payout_position != null && (
                       <div className="text-xs text-gray-600">#{m.payout_position}</div>
+                    )}
+                    {data.status === 'active' && (
+                      <Link
+                        to={`/s/${slug}/pay/${m.id}`}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
+                      >
+                        Pay Now
+                      </Link>
                     )}
                   </div>
                 </div>

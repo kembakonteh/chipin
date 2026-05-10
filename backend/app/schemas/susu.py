@@ -22,6 +22,12 @@ class SusuGroupCreate(BaseModel):
     late_fee_pct: Optional[Decimal] = None
     # Feature 8: group rules
     rules: Optional[str] = None
+    # Payment method settings
+    allow_card: bool = True
+    allow_cashapp: bool = False
+    allow_zelle: bool = False
+    cashapp_handle: Optional[str] = Field(None, max_length=100)
+    zelle_handle: Optional[str] = Field(None, max_length=100)
 
 
 class SusuGroupUpdate(BaseModel):
@@ -142,6 +148,12 @@ class SusuGroupResponse(BaseModel):
     late_fee_pct: Optional[Decimal] = None
     # Feature 8: group rules
     rules: Optional[str] = None
+    # Payment method settings
+    allow_card: bool = True
+    allow_cashapp: bool = False
+    allow_zelle: bool = False
+    cashapp_handle: Optional[str] = None
+    zelle_handle: Optional[str] = None
 
 
 class SusuDetailResponse(SusuGroupResponse):
@@ -209,3 +221,30 @@ class SusuJoinRequestResponse(BaseModel):
     message: Optional[str]
     status: SusuJoinRequestStatus
     created_at: datetime
+
+
+class SusuPaymentSettingsUpdate(BaseModel):
+    allow_card: Optional[bool] = None
+    allow_cashapp: Optional[bool] = None
+    allow_zelle: Optional[bool] = None
+    cashapp_handle: Optional[str] = Field(None, max_length=100)
+    zelle_handle: Optional[str] = Field(None, max_length=100)
+
+
+class SusuPayPageInfo(BaseModel):
+    group_name: str
+    slug: str
+    member_id: str
+    member_name: str
+    cycle_number: int
+    amount: Decimal
+    already_paid: bool
+    allow_card: bool
+    allow_cashapp: bool
+    allow_zelle: bool
+    cashapp_handle: Optional[str]
+    zelle_handle: Optional[str]
+
+
+class SusuOfflinePayRequest(BaseModel):
+    paid_via: SusuPaidVia

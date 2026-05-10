@@ -1,4 +1,7 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +12,33 @@ from app.models.user_features import UserFeatures
 from app.schemas.user_features import UserFeaturesResponse, UserFeaturesUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+class UserMeResponse(BaseModel):
+    email: str
+    name: str
+    phone: Optional[str]
+
+
+class UserMeUpdate(BaseModel):
+    phone: Optional[str] = Field(None, max_length=50)
+
+@router.get("/me", response_model=UserMeResponse)
+async def get_me(current_user: User = Depends(get_current_user)) -> UserMeResponse:
+    return UserMeResponse(email=current_user.email, name=current_user.name, phone=current_user.phone)
+
+
+@router.patch("/me", response_model=UserMeResponse)
+async def update_me(
+    body: UserMeUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserMeResponse:
+    if body.phone is not None:
+        current_user.phone = body.phone.strip() or None
+    await db.commit()
+    return UserMeResponse(email=current_user.email, name=current_user.name, phone=current_user.phone)
+
 
 _DEFAULTS = UserFeaturesResponse(
     campaigns_enabled=True,

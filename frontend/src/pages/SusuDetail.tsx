@@ -384,6 +384,9 @@ export default function SusuDetail() {
   // Feature 4: rules edit mode
   const [editingRules, setEditingRules] = useState(false)
   const [rulesText, setRulesText] = useState('')
+  // Payment settings
+  const [editingPaymentSettings, setEditingPaymentSettings] = useState(false)
+  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '' })
 
   const addMember = useMutation({
     mutationFn: () =>
@@ -446,6 +449,22 @@ export default function SusuDetail() {
     },
   })
 
+  const savePaymentSettings = useMutation({
+    mutationFn: () => api.patch(`/susu/${slug}/settings`, {
+      allow_card: paySettings.allow_card,
+      allow_cashapp: paySettings.allow_cashapp,
+      allow_zelle: paySettings.allow_zelle,
+      cashapp_handle: paySettings.cashapp_handle.trim() || null,
+      zelle_handle: paySettings.zelle_handle.trim() || null,
+    }).then(getData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      setEditingPaymentSettings(false)
+      toast.success('Payment settings saved')
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to save settings'),
+  })
+
   const permanentDelete = useMutation({
     mutationFn: () => api.delete(`/susu/${slug}/permanent`),
     onSuccess: () => navigate('/susu'),
@@ -455,7 +474,15 @@ export default function SusuDetail() {
   const shareStandings = useMutation({
     mutationFn: () => api.post(`/susu/${slug}/share-standings`),
     onSuccess: () => toast.success('Standings sent to your WhatsApp'),
-    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to send standings'),
+    onError: (err: any) => {
+      const detail: string = err?.response?.data?.detail ?? 'Failed to send standings'
+      if (detail.toLowerCase().includes('phone')) {
+        toast.error('Add your phone number in Profile to receive standings via WhatsApp', { duration: 5000 })
+        setTimeout(() => navigate('/profile'), 2500)
+      } else {
+        toast.error(detail)
+      }
+    },
   })
 
   const { data: joinRequests, refetch: refetchJoinRequests } = useQuery<SusuJoinRequest[]>({
@@ -977,6 +1004,109 @@ export default function SusuDetail() {
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {/* Payment Settings */}
+        {group.status !== 'completed' && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-white text-sm">Payment Methods</h2>
+              {!editingPaymentSettings && (
+                <button
+                  onClick={() => {
+                    setPaySettings({
+                      allow_card: group.allow_card,
+                      allow_cashapp: group.allow_cashapp,
+                      allow_zelle: group.allow_zelle,
+                      cashapp_handle: group.cashapp_handle ?? '',
+                      zelle_handle: group.zelle_handle ?? '',
+                    })
+                    setEditingPaymentSettings(true)
+                  }}
+                  className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            {editingPaymentSettings ? (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">Enable the methods members can use to pay their contribution.</p>
+                <div className="space-y-2">
+                  {[
+                    { key: 'allow_card' as const, label: 'Card (Stripe)', icon: '💳' },
+                    { key: 'allow_cashapp' as const, label: 'CashApp', icon: '💚' },
+                    { key: 'allow_zelle' as const, label: 'Zelle', icon: '🔵' },
+                  ].map(m => (
+                    <label key={m.key} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={paySettings[m.key]}
+                        onChange={e => setPaySettings(s => ({ ...s, [m.key]: e.target.checked }))}
+                        className="w-4 h-4 accent-brand-500"
+                      />
+                      <span className="text-sm text-gray-200">{m.icon} {m.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {paySettings.allow_cashapp && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">CashApp $cashtag</label>
+                    <input
+                      type="text"
+                      value={paySettings.cashapp_handle}
+                      onChange={e => setPaySettings(s => ({ ...s, cashapp_handle: e.target.value }))}
+                      placeholder="$yourname"
+                      className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+                {paySettings.allow_zelle && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Zelle phone or email</label>
+                    <input
+                      type="text"
+                      value={paySettings.zelle_handle}
+                      onChange={e => setPaySettings(s => ({ ...s, zelle_handle: e.target.value }))}
+                      placeholder="phone or email you receive Zelle on"
+                      className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => savePaymentSettings.mutate()}
+                    disabled={savePaymentSettings.isPending || (!paySettings.allow_card && !paySettings.allow_cashapp && !paySettings.allow_zelle)}
+                    className="px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                  >
+                    {savePaymentSettings.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditingPaymentSettings(false)}
+                    className="px-3 py-1.5 bg-gray-800 text-gray-400 text-xs rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {group.allow_card && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-blue-900/40 text-blue-300 border border-blue-800/40">💳 Card</span>
+                )}
+                {group.allow_cashapp && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-800/40">
+                    💚 CashApp{group.cashapp_handle ? ` · ${group.cashapp_handle}` : ''}
+                  </span>
+                )}
+                {group.allow_zelle && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-800/40">
+                    🔵 Zelle{group.zelle_handle ? ` · ${group.zelle_handle}` : ''}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -109,6 +109,12 @@ class SusuGroup(Base, UUIDMixin):
     late_fee_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     # Feature 8: group rules
     rules: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Payment method settings
+    allow_card: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    allow_cashapp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    allow_zelle: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    cashapp_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    zelle_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     owner: Mapped["User"] = relationship("User")
     org: Mapped[Optional["Org"]] = relationship("Org")

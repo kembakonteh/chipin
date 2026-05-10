@@ -6,6 +6,12 @@ import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import type { UserFeatures } from '../types'
 
+interface UserMe {
+  email: string
+  name: string
+  phone: string | null
+}
+
 interface ToggleRowProps {
   label: string
   icon: string
@@ -108,6 +114,33 @@ export default function ProfilePage() {
   })
   const [saving, setSaving] = useState(false)
 
+  const [me, setMe] = useState<UserMe | null>(null)
+  const [phone, setPhone] = useState('')
+  const [phoneEditing, setPhoneEditing] = useState(false)
+  const [phoneSaving, setPhoneSaving] = useState(false)
+
+  useEffect(() => {
+    api.get<UserMe>('/users/me').then(r => {
+      setMe(r.data)
+      setPhone(r.data.phone ?? '')
+    }).catch(() => {})
+  }, [])
+
+  async function handleSavePhone() {
+    setPhoneSaving(true)
+    try {
+      const { data } = await api.patch<UserMe>('/users/me', { phone: phone.trim() || null })
+      setMe(data)
+      setPhone(data.phone ?? '')
+      setPhoneEditing(false)
+      toast.success('Phone number saved')
+    } catch {
+      toast.error('Failed to save phone number')
+    } finally {
+      setPhoneSaving(false)
+    }
+  }
+
   useEffect(() => {
     if (features) {
       setLocal({
@@ -144,6 +177,87 @@ export default function ProfilePage() {
   return (
     <Layout>
       <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#fff', marginBottom: '24px' }}>Profile</h1>
+
+      {/* Account section */}
+      <div style={{
+        background: '#111827',
+        border: '1px solid #1f2937',
+        borderRadius: '16px',
+        padding: '16px 20px',
+        marginBottom: '24px',
+      }}>
+        <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#fff', margin: '0 0 12px' }}>Account</h2>
+        {me && (
+          <div style={{ marginBottom: '8px' }}>
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>{me.email}</span>
+          </div>
+        )}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 500 }}>Phone number</span>
+            {!phoneEditing && (
+              <button
+                type="button"
+                onClick={() => setPhoneEditing(true)}
+                style={{ fontSize: '13px', color: '#40916c', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                {me?.phone ? 'Edit' : '+ Add'}
+              </button>
+            )}
+          </div>
+          {phoneEditing ? (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+1 206 555 0100"
+                style={{
+                  flex: 1,
+                  background: '#1f2937',
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSavePhone}
+                disabled={phoneSaving}
+                style={{
+                  padding: '8px 14px',
+                  background: '#065f46',
+                  color: '#6ee7b7',
+                  border: '1px solid #047857',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: phoneSaving ? 'not-allowed' : 'pointer',
+                  opacity: phoneSaving ? 0.6 : 1,
+                }}
+              >
+                {phoneSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPhoneEditing(false); setPhone(me?.phone ?? '') }}
+                style={{ padding: '8px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: '14px', color: me?.phone ? '#d1d5db' : '#4b5563', margin: 0 }}>
+              {me?.phone ?? 'Not set — add your number for WhatsApp notifications'}
+            </p>
+          )}
+          <p style={{ fontSize: '11px', color: '#4b5563', margin: '4px 0 0' }}>
+            Used for Susu WhatsApp standings reports. Include country code.
+          </p>
+        </div>
+      </div>
 
       {/* Features section */}
       <div style={{
