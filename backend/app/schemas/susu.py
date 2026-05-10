@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.susu import SusuCycleStatus, SusuFrequency, SusuPaidVia, SusuPayoutOrder, SusuStatus
+from app.models.susu import SusuCycleStatus, SusuFrequency, SusuJoinRequestStatus, SusuPaidVia, SusuPayoutOrder, SusuStatus
 
 
 class SusuGroupCreate(BaseModel):
@@ -166,3 +166,46 @@ class MarkPaidRequest(BaseModel):
 class MarkPayoutRequest(BaseModel):
     payout_method: str = "cash"
     payout_reference: Optional[str] = None
+
+
+class SusuMemberStanding(BaseModel):
+    id: uuid.UUID
+    name: str
+    total_contributed: Decimal
+    paid_cycles: int
+    reliability_pct: Optional[int]
+    has_received_payout: bool
+    payout_position: Optional[int]
+
+
+class SusuStandingsResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    status: SusuStatus
+    current_cycle: int
+    total_cycles: int
+    contribution_amount: Decimal
+    frequency: SusuFrequency
+    total_members: int
+    members: List[SusuMemberStanding]
+
+
+class SusuJoinRequestCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    phone: str = Field(..., min_length=7, max_length=50)
+    email: Optional[str] = Field(None, max_length=255)
+    message: Optional[str] = Field(None, max_length=500)
+
+
+class SusuJoinRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    group_id: uuid.UUID
+    name: str
+    phone: str
+    email: Optional[str]
+    message: Optional[str]
+    status: SusuJoinRequestStatus
+    created_at: datetime

@@ -16,6 +16,8 @@ import SusuListPage from './pages/SusuListPage'
 import SusuCreatePage from './pages/SusuCreatePage'
 import SusuDetail from './pages/SusuDetail'
 import PublicSusu from './pages/PublicSusu'
+import SusuStandings from './pages/SusuStandings'
+import SusuJoin from './pages/SusuJoin'
 import PayoutSettings from './pages/Settings/PayoutSettings'
 import ProfilePage from './pages/ProfilePage'
 import JoinOrg from './pages/JoinOrg'
@@ -63,6 +65,8 @@ export default function App() {
         <Route path="/p/:slug/decline" element={<DeclinePage />} />
         <Route path="/o/:slug" element={<PublicOrgPage />} />
         <Route path="/s/:slug" element={<PublicSusu />} />
+        <Route path="/s/:slug/standings" element={<SusuStandings />} />
+        <Route path="/s/:slug/join" element={<SusuJoin />} />
         <Route path="/join/:token" element={<JoinOrg />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>

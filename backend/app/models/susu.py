@@ -49,6 +49,12 @@ class SusuPaidVia(str, enum.Enum):
     cashapp = "cashapp"
 
 
+class SusuJoinRequestStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 def _add_months(d: date, months: int) -> date:
     month = d.month - 1 + months
     year = d.year + month // 12
@@ -193,3 +199,26 @@ class SusuContribution(Base, UUIDMixin):
     member: Mapped["SusuMember"] = relationship("SusuMember")
     # Feature 4: missed payment flag
     missed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
+
+class SusuJoinRequest(Base, UUIDMixin):
+    __tablename__ = "susu_join_requests"
+
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("susu_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str] = mapped_column(String(50), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[SusuJoinRequestStatus] = mapped_column(
+        Enum(SusuJoinRequestStatus, name="susujoinrequeststatus"),
+        nullable=False,
+        default=SusuJoinRequestStatus.pending,
+        server_default="pending",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    group: Mapped["SusuGroup"] = relationship("SusuGroup")

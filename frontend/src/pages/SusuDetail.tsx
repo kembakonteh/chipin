@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
+import toast from 'react-hot-toast'
 import { api } from '../lib/api'
-import type { SusuDetail, SusuContribution, SusuCycleSummary, SusuCycleStatus, SusuPaidVia } from '../types'
+import type { SusuDetail, SusuContribution, SusuCycleSummary, SusuCycleStatus, SusuPaidVia, SusuJoinRequest } from '../types'
 import Layout from '../components/Layout'
 import { fmt } from '../types'
 
@@ -379,6 +380,7 @@ export default function SusuDetail() {
   const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '', slots: '1' })
   const [addError, setAddError] = useState('')
   const [showPayoutModal, setShowPayoutModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   // Feature 4: rules edit mode
   const [editingRules, setEditingRules] = useState(false)
   const [rulesText, setRulesText] = useState('')
@@ -442,6 +444,43 @@ export default function SusuDetail() {
       qc.invalidateQueries({ queryKey: ['susu', slug] })
       setEditingRules(false)
     },
+  })
+
+  const permanentDelete = useMutation({
+    mutationFn: () => api.delete(`/susu/${slug}/permanent`),
+    onSuccess: () => navigate('/susu'),
+    onError: () => toast.error('Failed to delete group'),
+  })
+
+  const shareStandings = useMutation({
+    mutationFn: () => api.post(`/susu/${slug}/share-standings`),
+    onSuccess: () => toast.success('Standings sent to your WhatsApp'),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to send standings'),
+  })
+
+  const { data: joinRequests, refetch: refetchJoinRequests } = useQuery<SusuJoinRequest[]>({
+    queryKey: ['susu-join-requests', slug],
+    queryFn: () => api.get<SusuJoinRequest[]>(`/susu/${slug}/join-requests`).then(r => r.data),
+    enabled: group?.status === 'forming',
+  })
+
+  const approveJoinRequest = useMutation({
+    mutationFn: (id: string) => api.post(`/susu/${slug}/join-requests/${id}/approve`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      refetchJoinRequests()
+      toast.success('Member approved and added')
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to approve'),
+  })
+
+  const rejectJoinRequest = useMutation({
+    mutationFn: (id: string) => api.post(`/susu/${slug}/join-requests/${id}/reject`),
+    onSuccess: () => {
+      refetchJoinRequests()
+      toast.success('Request rejected')
+    },
+    onError: () => toast.error('Failed to reject request'),
   })
 
   // Feature 9: Export CSV — use axios api instance so auth headers are injected
@@ -511,6 +550,12 @@ export default function SusuDetail() {
             <div className="text-xs text-gray-500 mt-1.5">
               Cycle {group.current_cycle} of {group.total_cycles}
             </div>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="mt-2 text-xs text-red-700 hover:text-red-500 transition-colors"
+            >
+              Delete group
+            </button>
           </div>
         </div>
 
@@ -536,23 +581,114 @@ export default function SusuDetail() {
           </div>
         )}
 
+        {/* Join requests — forming groups only */}
+        {group.status === 'forming' && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-white">Join Requests</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {joinRequests?.filter(r => r.status === 'pending').length ?? 0} pending
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const link = `${window.location.origin}/s/${slug}/join`
+                  navigator.clipboard.writeText(link)
+                    .then(() => toast.success('Join link copied!'))
+                    .catch(() => toast.error('Could not copy link'))
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-sky-900/30 text-sky-300 hover:bg-sky-900/50 border border-sky-800/40 transition-colors"
+              >
+                📋 Copy Join Link
+              </button>
+            </div>
+            {!joinRequests || joinRequests.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-gray-500">
+                No join requests yet. Share your join link to invite people.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-800">
+                {joinRequests.map(r => (
+                  <div key={r.id} className="flex items-center justify-between px-5 py-3">
+                    <div className="flex-1 min-w-0 mr-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-white font-medium truncate">{r.name}</span>
+                        <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${
+                          r.status === 'pending'  ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-800/40'
+                          : r.status === 'approved' ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/40'
+                          : 'bg-gray-800 text-gray-500 border border-gray-700'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">{r.phone}</div>
+                      {r.message && (
+                        <div className="text-xs text-gray-400 mt-0.5 italic truncate">"{r.message}"</div>
+                      )}
+                    </div>
+                    {r.status === 'pending' && (
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => approveJoinRequest.mutate(r.id)}
+                          disabled={approveJoinRequest.isPending}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-brand-700/40 text-brand-300 hover:bg-brand-700/70 border border-brand-700/50 transition-colors disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectJoinRequest.mutate(r.id)}
+                          disabled={rejectJoinRequest.isPending}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-800/40 transition-colors disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tabs */}
         {group.status === 'active' && (
-          <div className="flex gap-1 border-b border-gray-800">
-            {TABS.map(t => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  tab === t.key
-                    ? 'border-brand-500 text-brand-300'
-                    : 'border-transparent text-gray-500 hover:text-gray-300'
-                }`}
+          <div className="flex items-center gap-2 border-b border-gray-800">
+            <div className="flex gap-1 flex-1">
+              {TABS.map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    tab === t.key
+                      ? 'border-brand-500 text-brand-300'
+                      : 'border-transparent text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 pb-1">
+              <a
+                href={`/s/${slug}/standings`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 border border-gray-700 transition-colors"
               >
-                {t.label}
+                📊 Standings
+              </a>
+              <button
+                onClick={() => shareStandings.mutate()}
+                disabled={shareStandings.isPending}
+                className="text-xs px-2.5 py-1 rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors disabled:opacity-50"
+                title="Send standings to your WhatsApp"
+              >
+                {shareStandings.isPending ? '…' : '📱'}
               </button>
-            ))}
+            </div>
           </div>
         )}
 
@@ -906,6 +1042,41 @@ export default function SusuDetail() {
           }
           onClose={() => setShowPayoutModal(false)}
         />
+      )}
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-red-800/60 bg-gray-900 p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-red-400 mb-2">Delete Susu Group?</h2>
+            <p className="text-sm text-gray-300 mb-2">
+              This will permanently delete{' '}
+              <span className="font-medium text-white">{group.name}</span> and all its records.
+            </p>
+            {group.total_members > 0 && (
+              <p className="text-xs text-red-400/80 mb-2">
+                {group.total_members} member{group.total_members !== 1 ? 's' : ''}, all cycles, and all contribution records will be removed.
+              </p>
+            )}
+            <p className="text-xs font-semibold text-red-500 mb-5">This cannot be undone.</p>
+            <button
+              onClick={() => permanentDelete.mutate()}
+              disabled={permanentDelete.isPending}
+              className="w-full py-3 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {permanentDelete.isPending ? 'Deleting…' : 'Yes, delete permanently'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              className="mt-3 w-full py-2 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </Layout>
   )

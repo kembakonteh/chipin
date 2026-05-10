@@ -12,7 +12,7 @@ from typing import List, Optional
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,8 @@ from app.models.susu import (
     SusuCycleStatus,
     SusuFrequency,
     SusuGroup,
+    SusuJoinRequest,
+    SusuJoinRequestStatus,
     SusuMember,
     SusuPayoutOrder,
     SusuPaidVia,
@@ -44,9 +46,13 @@ from app.schemas.susu import (
     SusuGroupCreate,
     SusuGroupResponse,
     SusuGroupUpdate,
+    SusuJoinRequestCreate,
+    SusuJoinRequestResponse,
     SusuMemberCreate,
     SusuMemberResponse,
+    SusuMemberStanding,
     SusuMemberUpdate,
+    SusuStandingsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -293,6 +299,94 @@ async def delete_susu_group(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete an active group")
     await db.delete(group)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# DELETE /susu/{slug}/permanent — hard delete any group, explicit cascade order
+# ---------------------------------------------------------------------------
+
+@router.delete("/susu/{slug}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+async def permanent_delete_susu_group(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    # Explicit cascade order avoids RESTRICT violation on SusuCycle.recipient_member_id
+    cycle_ids = select(SusuCycle.id).where(SusuCycle.group_id == group.id)
+    await db.execute(sa_delete(SusuContribution).where(SusuContribution.cycle_id.in_(cycle_ids)))
+    await db.execute(sa_delete(SusuCycle).where(SusuCycle.group_id == group.id))
+    await db.execute(sa_delete(SusuJoinRequest).where(SusuJoinRequest.group_id == group.id))
+    await db.execute(sa_delete(SusuMember).where(SusuMember.group_id == group.id))
+    await db.delete(group)
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/share-standings — WhatsApp standings to organizer
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/share-standings")
+async def share_susu_standings(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(SusuGroup)
+        .options(
+            selectinload(SusuGroup.members),
+            selectinload(SusuGroup.cycles).selectinload(SusuCycle.contributions),
+            selectinload(SusuGroup.owner),
+        )
+        .where(SusuGroup.slug == slug)
+    )
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    owner_phone = group.owner.phone if group.owner else None
+    if not owner_phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No phone number on your account. Add one in your profile to receive standings.",
+        )
+
+    cycles_sorted = sorted(group.cycles, key=lambda c: c.cycle_number)
+    standings = []
+    for m in group.members:
+        paid = sum(
+            1 for cycle in cycles_sorted
+            if cycle.cycle_number <= group.current_cycle
+            and any(c.member_id == m.id and c.paid for c in cycle.contributions)
+        )
+        standings.append((m.name, m.total_contributed, paid, m.has_received_payout))
+    standings.sort(key=lambda s: s[1], reverse=True)
+
+    lines = [f"📊 {group.name} Standings — Cycle {group.current_cycle}/{group.total_cycles}", ""]
+    for i, (name, total, paid_cycles, received) in enumerate(standings, 1):
+        payout_flag = " 🏆" if received else ""
+        lines.append(f"{i}. {name}: ${total:.2f} ({paid_cycles} paid){payout_flag}")
+
+    lines += ["", f"Full standings: {settings.FRONTEND_URL}/s/{slug}/standings", "Powered by ChipIn 🤝"]
+
+    message = "\n".join(lines)
+    try:
+        from app.workers.tasks import _send_whatsapp_text
+        await _send_whatsapp_text(owner_phone, message)
+    except Exception as exc:
+        logger.warning("Failed to send standings WhatsApp: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to send WhatsApp message")
+
+    return {"sent": True}
 
 
 # ---------------------------------------------------------------------------
@@ -913,6 +1007,111 @@ async def export_susu_csv(
 
 
 # ---------------------------------------------------------------------------
+# GET /susu/{slug}/join-requests — list join requests (organizer only)
+# ---------------------------------------------------------------------------
+
+@router.get("/susu/{slug}/join-requests", response_model=List[SusuJoinRequestResponse])
+async def list_join_requests(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    requests_result = await db.execute(
+        select(SusuJoinRequest)
+        .where(SusuJoinRequest.group_id == group.id)
+        .order_by(SusuJoinRequest.created_at.desc())
+    )
+    return requests_result.scalars().all()
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/join-requests/{request_id}/approve
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/join-requests/{request_id}/approve", response_model=SusuJoinRequestResponse)
+async def approve_join_request(
+    slug: str,
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(SusuGroup).options(selectinload(SusuGroup.members)).where(SusuGroup.slug == slug)
+    )
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+    if group.status != SusuStatus.forming:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only approve join requests while group is forming")
+
+    req_result = await db.execute(
+        select(SusuJoinRequest).where(SusuJoinRequest.id == request_id, SusuJoinRequest.group_id == group.id)
+    )
+    join_req = req_result.scalar_one_or_none()
+    if not join_req:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Join request not found")
+    if join_req.status != SusuJoinRequestStatus.pending:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request already processed")
+
+    existing_phones = {m.phone for m in group.members}
+    if join_req.phone in existing_phones:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Member with this phone already exists in group")
+
+    member = SusuMember(
+        group_id=group.id,
+        name=join_req.name,
+        phone=join_req.phone,
+        email=join_req.email,
+    )
+    db.add(member)
+    group.total_members += 1
+    join_req.status = SusuJoinRequestStatus.approved
+    await db.commit()
+    await db.refresh(join_req)
+    return join_req
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/join-requests/{request_id}/reject
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/join-requests/{request_id}/reject", response_model=SusuJoinRequestResponse)
+async def reject_join_request(
+    slug: str,
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group or group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    req_result = await db.execute(
+        select(SusuJoinRequest).where(SusuJoinRequest.id == request_id, SusuJoinRequest.group_id == group.id)
+    )
+    join_req = req_result.scalar_one_or_none()
+    if not join_req:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Join request not found")
+    if join_req.status != SusuJoinRequestStatus.pending:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request already processed")
+
+    join_req.status = SusuJoinRequestStatus.rejected
+    await db.commit()
+    await db.refresh(join_req)
+    return join_req
+
+
+# ---------------------------------------------------------------------------
 # POST /s/{slug}/pay — public Stripe checkout for susu contribution
 # ---------------------------------------------------------------------------
 
@@ -1018,3 +1217,91 @@ async def public_susu_page(
 ):
     group = await _get_group_or_404(slug, db)
     return _build_detail(group)
+
+
+# ---------------------------------------------------------------------------
+# GET /s/{slug}/standings — public standings page
+# ---------------------------------------------------------------------------
+
+@public_router.get("/s/{slug}/standings", response_model=SusuStandingsResponse)
+async def public_susu_standings(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+):
+    group = await _get_group_or_404(slug, db)
+
+    cycles_sorted = sorted(group.cycles, key=lambda c: c.cycle_number)
+    standings = []
+    for m in group.members:
+        due_so_far = 0
+        paid_cycles = 0
+        for cycle in cycles_sorted:
+            if cycle.cycle_number <= group.current_cycle:
+                due_so_far += 1
+                if any(c.member_id == m.id and c.paid for c in cycle.contributions):
+                    paid_cycles += 1
+        reliability_pct = round((paid_cycles / due_so_far) * 100) if due_so_far > 0 else None
+        standings.append(SusuMemberStanding(
+            id=m.id,
+            name=m.name,
+            total_contributed=m.total_contributed,
+            paid_cycles=paid_cycles,
+            reliability_pct=reliability_pct,
+            has_received_payout=m.has_received_payout,
+            payout_position=m.payout_position,
+        ))
+
+    standings.sort(key=lambda s: s.total_contributed, reverse=True)
+
+    return SusuStandingsResponse(
+        id=group.id,
+        name=group.name,
+        slug=group.slug,
+        status=group.status,
+        current_cycle=group.current_cycle,
+        total_cycles=group.total_cycles,
+        contribution_amount=group.contribution_amount,
+        frequency=group.frequency,
+        total_members=group.total_members,
+        members=standings,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /s/{slug}/join — public join request submission
+# ---------------------------------------------------------------------------
+
+@public_router.post("/s/{slug}/join", response_model=SusuJoinRequestResponse, status_code=status.HTTP_201_CREATED)
+async def submit_join_request(
+    slug: str,
+    body: SusuJoinRequestCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.status != SusuStatus.forming:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This group is no longer accepting join requests")
+
+    existing = await db.execute(
+        select(SusuJoinRequest).where(
+            SusuJoinRequest.group_id == group.id,
+            SusuJoinRequest.phone == body.phone,
+            SusuJoinRequest.status == SusuJoinRequestStatus.pending,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A pending request with this phone already exists")
+
+    join_req = SusuJoinRequest(
+        group_id=group.id,
+        name=body.name,
+        phone=body.phone,
+        email=body.email,
+        message=body.message,
+    )
+    db.add(join_req)
+    await db.commit()
+    await db.refresh(join_req)
+    return join_req

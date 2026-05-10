@@ -86,6 +86,42 @@ export interface SusuDetail extends SusuGroup {
   cycle_summaries: SusuCycleSummary[]
 }
 
+export type SusuJoinRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface SusuJoinRequest {
+  id: string
+  group_id: string
+  name: string
+  phone: string
+  email: string | null
+  message: string | null
+  status: SusuJoinRequestStatus
+  created_at: string
+}
+
+export interface SusuMemberStanding {
+  id: string
+  name: string
+  total_contributed: string
+  paid_cycles: number
+  reliability_pct: number | null
+  has_received_payout: boolean
+  payout_position: number | null
+}
+
+export interface SusuStandingsData {
+  id: string
+  name: string
+  slug: string
+  status: SusuStatus
+  current_cycle: number
+  total_cycles: number
+  contribution_amount: string
+  frequency: SusuFrequency
+  total_members: number
+  members: SusuMemberStanding[]
+}
+
 export type CollectionCurrency = 'USD' | 'GBP' | 'EUR' | 'CAD'
 export type PayoutCurrency = 'USD' | 'GBP' | 'EUR' | 'GMD' | 'NGN' | 'GHS' | 'XOF'
 export type MethodType = 'mobile_money' | 'bank_transfer' | 'stripe_connect'
