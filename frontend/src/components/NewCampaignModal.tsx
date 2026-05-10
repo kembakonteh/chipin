@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
@@ -69,15 +69,6 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   const [createdCampaign, setCreatedCampaign] = useState<Campaign | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const qc = useQueryClient()
-  const overlayRef = useRef<HTMLDivElement>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
-
-  useLayoutEffect(() => {
-    if (overlayRef.current) overlayRef.current.scrollTop = 0
-    if (cardRef.current) cardRef.current.scrollTop = 0
-    document.documentElement.scrollTop = 0
-    document.body.scrollTop = 0
-  }, [step])
 
   const { data: templates = [] } = useQuery<CampaignTemplate[]>({
     queryKey: ['templates'],
@@ -201,15 +192,14 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
 
   return (
     <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4
-        bg-black/70 backdrop-blur-sm overflow-y-auto"
+      className="fixed inset-0 z-50 overflow-y-auto bg-gray-900
+        md:bg-black/70 md:backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        ref={cardRef}
-        className="w-full max-w-lg rounded-2xl bg-gray-900 border border-gray-700 shadow-2xl my-4
-          max-h-[85vh] overflow-y-auto"
+        className="w-full min-h-full
+          md:min-h-0 md:max-w-lg md:rounded-2xl md:bg-gray-900 md:border md:border-gray-700
+          md:shadow-2xl md:my-4 md:max-h-[85vh] md:overflow-y-auto"
       >
 
         {/* Header */}
