@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
@@ -69,6 +69,11 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   const [createdCampaign, setCreatedCampaign] = useState<Campaign | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const qc = useQueryClient()
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, 0)
+  }, [step])
 
   const { data: templates = [] } = useQuery<CampaignTemplate[]>({
     queryKey: ['templates'],
@@ -90,7 +95,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
       ...prev,
       emoji: t.emoji,
       title: '',
-      description: t.description_template,
+      description: '',
       campaign_type: t.campaign_type,
       goal_amount: '',
       amount_per_person: t.default_amount_per_person != null ? String(t.default_amount_per_person) : '',
@@ -192,6 +197,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
 
   return (
     <div
+      ref={scrollRef}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4
         bg-black/70 backdrop-blur-sm overflow-y-auto"
       onClick={(e) => e.target === e.currentTarget && onClose()}
