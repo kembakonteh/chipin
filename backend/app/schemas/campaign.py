@@ -95,6 +95,7 @@ class CampaignResponse(BaseModel):
     cashapp_handle: Optional[str]
     platform_fee_pct: Decimal
     org_id: Optional[uuid.UUID]
+    org_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     beneficiary: Optional[BeneficiaryResponse] = None

@@ -122,6 +122,7 @@ export interface Campaign {
   cashapp_handle: string | null
   platform_fee_pct: string
   org_id: string | null
+  org_name: string | null
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary | null

@@ -621,7 +621,7 @@ async def org_campaigns(
     result = await db.execute(
         select(Campaign)
         .where(Campaign.org_id == org.id)
-        .options(selectinload(Campaign.beneficiary))
+        .options(selectinload(Campaign.beneficiary), selectinload(Campaign.org))
         .order_by(Campaign.created_at.desc())
     )
     campaigns = result.scalars().all()
@@ -637,7 +637,10 @@ async def org_campaigns(
     active = sum(1 for c in campaigns if c.status == CampaignStatus.active)
 
     return {
-        "campaigns": [CampaignResponse.model_validate(c) for c in campaigns],
+        "campaigns": [
+            CampaignResponse.model_validate(c).model_copy(update={"org_name": c.org.name if c.org else None})
+            for c in campaigns
+        ],
         "stats": OrgStatsResponse(
             total_raised=total_raised,
             total_campaigns=len(campaigns),

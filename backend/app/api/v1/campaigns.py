@@ -39,6 +39,12 @@ from app.schemas.contributor import (
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 
+def _campaign_resp(c: Campaign) -> CampaignResponse:
+    r = CampaignResponse.model_validate(c)
+    r.org_name = c.org.name if c.org else None
+    return r
+
+
 async def _unique_slug(title: str, db: AsyncSession) -> str:
     base = slugify(title)
     slug, counter = base, 1
@@ -137,10 +143,10 @@ async def create_campaign(
     result = await db.execute(
         select(Campaign)
         .where(Campaign.id == campaign.id)
-        .options(selectinload(Campaign.beneficiary))
+        .options(selectinload(Campaign.beneficiary), selectinload(Campaign.org))
     )
     campaign = result.scalar_one()
-    return campaign
+    return _campaign_resp(campaign)
 
 
 @router.get("", response_model=PaginatedResponse[CampaignResponse])
@@ -156,13 +162,13 @@ async def list_campaigns(
 
     offset = (page - 1) * size
     result = await db.execute(
-        base_q.options(selectinload(Campaign.beneficiary))
+        base_q.options(selectinload(Campaign.beneficiary), selectinload(Campaign.org))
         .order_by(Campaign.created_at.desc()).offset(offset).limit(size)
     )
     items = result.scalars().all()
 
     return PaginatedResponse(
-        items=items,
+        items=[_campaign_resp(c) for c in items],
         total=total,
         page=page,
         size=size,
@@ -179,12 +185,12 @@ async def get_campaign(
     result = await db.execute(
         select(Campaign)
         .where(Campaign.slug == slug, Campaign.owner_id == current_user.id)
-        .options(selectinload(Campaign.beneficiary))
+        .options(selectinload(Campaign.beneficiary), selectinload(Campaign.org))
     )
     campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
-    return campaign
+    return _campaign_resp(campaign)
 
 
 @router.patch("/{slug}", response_model=CampaignResponse)
@@ -201,9 +207,9 @@ async def update_campaign(
     result = await db.execute(
         select(Campaign)
         .where(Campaign.id == campaign.id)
-        .options(selectinload(Campaign.beneficiary))
+        .options(selectinload(Campaign.beneficiary), selectinload(Campaign.org))
     )
-    return result.scalar_one()
+    return _campaign_resp(result.scalar_one())
 
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)

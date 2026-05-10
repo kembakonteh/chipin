@@ -73,6 +73,11 @@ export default function CampaignCard({ campaign }: { campaign: Campaign }) {
                 </span>
               )}
             </span>
+            {campaign.org_name && (
+              <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-brand-900/40 text-brand-300 border border-brand-800/40">
+                🏢 {campaign.org_name}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
