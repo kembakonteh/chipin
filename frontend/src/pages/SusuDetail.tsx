@@ -521,6 +521,8 @@ export default function SusuDetail() {
     { key: 'members',  label: 'Members' },
   ]
 
+  console.log('[SusuDetail] rendering — status:', group.status, 'slug:', slug, 'showDeleteConfirm:', showDeleteConfirm)
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto space-y-6">
@@ -554,29 +556,30 @@ export default function SusuDetail() {
         </div>
 
         {/* Action bar — always visible */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap border border-gray-800 rounded-xl px-4 py-3 bg-gray-900">
           {group.status === 'active' && (
             <>
               <a
                 href={`/s/${slug}/standings`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600 transition-colors"
               >
                 📊 Public Standings
               </a>
               <button
                 onClick={() => shareStandings.mutate()}
                 disabled={shareStandings.isPending}
-                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors disabled:opacity-50"
+                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-600 transition-colors disabled:opacity-50"
               >
                 {shareStandings.isPending ? 'Sending…' : '📱 Share Standings'}
               </button>
             </>
           )}
+          <div className="flex-1" />
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/30 transition-colors"
+            className="text-xs px-3 py-1.5 rounded-lg bg-red-900 text-red-200 hover:bg-red-800 border border-red-700 transition-colors"
           >
             🗑 Delete Group
           </button>
