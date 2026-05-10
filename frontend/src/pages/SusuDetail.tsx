@@ -550,13 +550,36 @@ export default function SusuDetail() {
             <div className="text-xs text-gray-500 mt-1.5">
               Cycle {group.current_cycle} of {group.total_cycles}
             </div>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="mt-2 text-xs text-red-700 hover:text-red-500 transition-colors"
-            >
-              Delete group
-            </button>
           </div>
+        </div>
+
+        {/* Action bar — always visible */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {group.status === 'active' && (
+            <>
+              <a
+                href={`/s/${slug}/standings`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+              >
+                📊 Public Standings
+              </a>
+              <button
+                onClick={() => shareStandings.mutate()}
+                disabled={shareStandings.isPending}
+                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors disabled:opacity-50"
+              >
+                {shareStandings.isPending ? 'Sending…' : '📱 Share Standings'}
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/30 transition-colors"
+          >
+            🗑 Delete Group
+          </button>
         </div>
 
         {/* Start button for forming groups */}
@@ -654,41 +677,21 @@ export default function SusuDetail() {
 
         {/* Tabs */}
         {group.status === 'active' && (
-          <div className="flex items-center gap-2 border-b border-gray-800">
-            <div className="flex gap-1 flex-1">
-              {TABS.map(t => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                    tab === t.key
-                      ? 'border-brand-500 text-brand-300'
-                      : 'border-transparent text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 pb-1">
-              <a
-                href={`/s/${slug}/standings`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 border border-gray-700 transition-colors"
-              >
-                📊 Standings
-              </a>
+          <div className="flex gap-1 border-b border-gray-800">
+            {TABS.map(t => (
               <button
-                onClick={() => shareStandings.mutate()}
-                disabled={shareStandings.isPending}
-                className="text-xs px-2.5 py-1 rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors disabled:opacity-50"
-                title="Send standings to your WhatsApp"
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  tab === t.key
+                    ? 'border-brand-500 text-brand-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
               >
-                {shareStandings.isPending ? '…' : '📱'}
+                {t.label}
               </button>
-            </div>
+            ))}
           </div>
         )}
 
