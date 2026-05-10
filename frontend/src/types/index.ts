@@ -35,6 +35,7 @@ export interface SusuContribution {
   paid_via: SusuPaidVia | null
   paid_at: string | null
   missed: boolean  // Feature 4: missed payment flag
+  pending_verification: boolean
 }
 
 export interface SusuCycleSummary {
@@ -94,6 +95,8 @@ export interface SusuPayPageInfo {
   cycle_number: number
   amount: string
   already_paid: boolean
+  pending_verification: boolean
+  pending_paid_via: string | null
   allow_card: boolean
   allow_cashapp: boolean
   allow_zelle: boolean

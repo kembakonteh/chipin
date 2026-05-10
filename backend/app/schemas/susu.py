@@ -88,6 +88,7 @@ class SusuContributionResponse(BaseModel):
     paid_at: Optional[datetime]
     # Feature 4: missed flag
     missed: bool = False
+    pending_verification: bool = False
 
 
 class SusuCycleResponse(BaseModel):
@@ -239,6 +240,8 @@ class SusuPayPageInfo(BaseModel):
     cycle_number: int
     amount: Decimal
     already_paid: bool
+    pending_verification: bool
+    pending_paid_via: Optional[str]
     allow_card: bool
     allow_cashapp: bool
     allow_zelle: bool

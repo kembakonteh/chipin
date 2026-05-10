@@ -61,66 +61,112 @@ function ContributionRow({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
   })
 
-  const rowClass = contribution.missed
-    ? 'bg-red-900/20 border border-red-800/30'
-    : contribution.paid
-      ? 'bg-emerald-900/20 border border-emerald-800/30'
-      : 'bg-gray-800 border border-gray-700'
+  const confirmPayment = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${groupSlug}/contributions/${contribution.id}/confirm`).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to confirm'),
+  })
+
+  const rejectPayment = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${groupSlug}/contributions/${contribution.id}/reject`).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to reject'),
+  })
+
+  const isPending = contribution.pending_verification
+
+  const rowClass = isPending
+    ? 'bg-amber-950 border border-amber-800'
+    : contribution.missed
+      ? 'bg-red-950 border border-red-800'
+      : contribution.paid
+        ? 'bg-emerald-950 border border-emerald-800'
+        : 'bg-gray-800 border border-gray-700'
 
   return (
-    <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm ${rowClass}`}>
-      <div className="flex items-center gap-2">
-        <span className={`text-base ${contribution.paid ? '' : contribution.missed ? 'text-red-400' : 'opacity-30'}`}>
-          {contribution.paid ? '✓' : contribution.missed ? '✗' : '○'}
-        </span>
-        <span className={contribution.paid ? 'text-white' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
-          {contribution.member_name}
-        </span>
-        {contribution.missed && (
-          <span className="text-xs text-red-400/70 font-medium">Missed</span>
-        )}
-        {contribution.paid && contribution.paid_via && (
-          <span className="text-xs text-gray-500 capitalize">via {contribution.paid_via}</span>
-        )}
+    <div className={`rounded-lg text-sm ${rowClass}`}>
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className={`text-base ${contribution.paid ? 'text-emerald-400' : isPending ? 'text-amber-400' : contribution.missed ? 'text-red-400' : 'text-gray-600'}`}>
+            {contribution.paid ? '✓' : isPending ? '⏳' : contribution.missed ? '✗' : '○'}
+          </span>
+          <span className={contribution.paid ? 'text-white' : isPending ? 'text-amber-200' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
+            {contribution.member_name}
+          </span>
+          {isPending && (
+            <span className="text-xs text-amber-400 font-medium">
+              Pending · via {contribution.paid_via ?? '?'}
+            </span>
+          )}
+          {contribution.missed && !isPending && (
+            <span className="text-xs text-red-400 font-medium">Missed</span>
+          )}
+          {contribution.paid && contribution.paid_via && (
+            <span className="text-xs text-gray-500 capitalize">via {contribution.paid_via}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={
+            contribution.paid ? 'text-emerald-400 font-medium text-xs'
+            : isPending ? 'text-amber-400 text-xs'
+            : contribution.missed ? 'text-red-400 text-xs'
+            : 'text-gray-500 text-xs'
+          }>
+            {fmt(parseFloat(contribution.amount))}
+          </span>
+          {!contribution.paid && !contribution.missed && !isPending && isCurrentCycle && (
+            <div className="flex items-center gap-1">
+              <select
+                value={payVia}
+                onChange={e => setPayVia(e.target.value as SusuPaidVia)}
+                onClick={e => e.stopPropagation()}
+                className="rounded bg-gray-700 border border-gray-600 text-xs text-gray-300 px-1 py-1 focus:outline-none"
+              >
+                {PAID_VIA_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => markPaid.mutate()}
+                disabled={markPaid.isPending}
+                className="text-xs px-2 py-1 rounded bg-brand-700 text-brand-200 hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              >
+                {markPaid.isPending ? '…' : 'Mark paid'}
+              </button>
+              <button
+                onClick={() => markMissed.mutate()}
+                disabled={markMissed.isPending}
+                className="text-xs px-2 py-1 rounded bg-red-900 text-red-300 hover:bg-red-800 disabled:opacity-50 transition-colors"
+                title="Mark as missed"
+              >
+                {markMissed.isPending ? '…' : '✗'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span className={
-          contribution.paid ? 'text-emerald-400 font-medium text-xs'
-          : contribution.missed ? 'text-red-400 text-xs'
-          : 'text-gray-500 text-xs'
-        }>
-          {fmt(parseFloat(contribution.amount))}
-        </span>
-        {!contribution.paid && !contribution.missed && isCurrentCycle && (
-          <div className="flex items-center gap-1">
-            <select
-              value={payVia}
-              onChange={e => setPayVia(e.target.value as SusuPaidVia)}
-              onClick={e => e.stopPropagation()}
-              className="rounded bg-gray-700 border border-gray-600 text-xs text-gray-300 px-1 py-1 focus:outline-none"
-            >
-              {PAID_VIA_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => markPaid.mutate()}
-              disabled={markPaid.isPending}
-              className="text-xs px-2 py-1 rounded bg-brand-700 text-brand-200 hover:bg-brand-600 disabled:opacity-50 transition-colors"
-            >
-              {markPaid.isPending ? '…' : 'Mark paid'}
-            </button>
-            <button
-              onClick={() => markMissed.mutate()}
-              disabled={markMissed.isPending}
-              className="text-xs px-2 py-1 rounded bg-red-900/60 text-red-300 hover:bg-red-800/60 disabled:opacity-50 transition-colors"
-              title="Mark as missed"
-            >
-              {markMissed.isPending ? '…' : '✗'}
-            </button>
-          </div>
-        )}
-      </div>
+
+      {/* Pending verification: confirm / reject bar */}
+      {isPending && isCurrentCycle && (
+        <div className="flex gap-2 px-3 pb-2.5">
+          <button
+            onClick={() => confirmPayment.mutate()}
+            disabled={confirmPayment.isPending || rejectPayment.isPending}
+            className="flex-1 py-1.5 text-xs font-semibold rounded bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          >
+            {confirmPayment.isPending ? 'Confirming…' : '✓ Confirm Receipt'}
+          </button>
+          <button
+            onClick={() => rejectPayment.mutate()}
+            disabled={confirmPayment.isPending || rejectPayment.isPending}
+            className="flex-1 py-1.5 text-xs font-semibold rounded bg-red-900 text-red-200 hover:bg-red-800 disabled:opacity-50 transition-colors"
+          >
+            {rejectPayment.isPending ? 'Rejecting…' : '✗ Reject'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

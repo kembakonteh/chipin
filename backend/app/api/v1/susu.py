@@ -105,6 +105,7 @@ def _build_cycle_response(cycle: SusuCycle) -> SusuCycleResponse:
             paid_via=c.paid_via,
             paid_at=c.paid_at,
             missed=c.missed,  # Feature 4
+            pending_verification=c.pending_verification,
         )
         for c in cycle.contributions
     ]
@@ -639,18 +640,24 @@ async def mark_contribution_paid(
     if not contrib:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution record not found for member")
 
+    already_counted = contrib.pending_verification  # pending_verification means amount was NOT yet counted
     contrib.paid = True
     contrib.paid_via = body.paid_via
     contrib.paid_at = datetime.now(timezone.utc)
+    contrib.pending_verification = False
 
-    # Update cycle collected amount
-    cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
+    if not already_counted:
+        # Update cycle collected amount
+        cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
 
-    # Update member total
-    member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
-    member = member_result.scalar_one_or_none()
-    if member:
-        member.total_contributed += contrib.amount
+        # Update member total
+        member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
+        member = member_result.scalar_one_or_none()
+        if member:
+            member.total_contributed += contrib.amount
+    else:
+        member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
+        member = member_result.scalar_one_or_none()
 
     # Auto-collect cycle if all paid
     unpaid = [c for c in cycle.contributions if not c.paid]
@@ -669,6 +676,7 @@ async def mark_contribution_paid(
         paid=contrib.paid,
         paid_via=contrib.paid_via,
         paid_at=contrib.paid_at,
+        pending_verification=contrib.pending_verification,
     )
 
 
@@ -1193,6 +1201,8 @@ async def get_susu_pay_info(
     )
     contrib = contrib_result.scalar_one_or_none()
     already_paid = contrib.paid if contrib else False
+    pending_verification = (contrib.pending_verification if contrib else False)
+    pending_paid_via = (contrib.paid_via.value if contrib and contrib.pending_verification and contrib.paid_via else None)
     amount = contrib.amount if contrib else member.slots * group.contribution_amount
 
     return SusuPayPageInfo(
@@ -1203,6 +1213,8 @@ async def get_susu_pay_info(
         cycle_number=group.current_cycle,
         amount=amount,
         already_paid=already_paid,
+        pending_verification=pending_verification,
+        pending_paid_via=pending_paid_via,
         allow_card=group.allow_card,
         allow_cashapp=group.allow_cashapp,
         allow_zelle=group.allow_zelle,
@@ -1346,21 +1358,129 @@ async def susu_member_offline_pay(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No contribution record for this member")
     if contrib.paid:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
+    if contrib.pending_verification:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Payment already submitted and awaiting organiser confirmation")
 
-    contrib.paid = True
+    contrib.pending_verification = True
     contrib.paid_via = body.paid_via
     contrib.paid_at = datetime.now(timezone.utc)
-    cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
-    member.total_contributed += contrib.amount
-
-    unpaid = await db.execute(
-        select(SusuContribution).where(SusuContribution.cycle_id == cycle.id, SusuContribution.paid == False)
-    )
-    if not unpaid.scalars().first():
-        cycle.status = SusuCycleStatus.collected
 
     await db.commit()
-    return {"paid": True, "amount": str(contrib.amount), "paid_via": body.paid_via.value}
+    return {"pending_verification": True, "amount": str(contrib.amount), "paid_via": body.paid_via.value}
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/contributions/{contribution_id}/confirm — organizer confirms offline payment
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/contributions/{contribution_id}/confirm", response_model=SusuContributionResponse)
+async def confirm_offline_payment(
+    slug: str,
+    contribution_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    contrib_result = await db.execute(
+        select(SusuContribution)
+        .options(selectinload(SusuContribution.member), selectinload(SusuContribution.cycle))
+        .where(SusuContribution.id == contribution_id)
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib or contrib.cycle.group_id != group.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution not found")
+    if not contrib.pending_verification:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Contribution is not pending verification")
+
+    contrib.paid = True
+    contrib.pending_verification = False
+    if not contrib.paid_at:
+        contrib.paid_at = datetime.now(timezone.utc)
+
+    contrib.cycle.collected_amount = (contrib.cycle.collected_amount or Decimal("0")) + contrib.amount
+
+    member_result = await db.execute(select(SusuMember).where(SusuMember.id == contrib.member_id))
+    member = member_result.scalar_one_or_none()
+    if member:
+        member.total_contributed += contrib.amount
+
+    all_contribs_result = await db.execute(
+        select(SusuContribution).where(SusuContribution.cycle_id == contrib.cycle_id, SusuContribution.paid == False)
+    )
+    if not all_contribs_result.scalars().first():
+        contrib.cycle.status = SusuCycleStatus.collected
+
+    await db.commit()
+    await db.refresh(contrib)
+
+    return SusuContributionResponse(
+        id=contrib.id,
+        cycle_id=contrib.cycle_id,
+        member_id=contrib.member_id,
+        member_name=contrib.member.name if contrib.member else "Unknown",
+        amount=contrib.amount,
+        paid=contrib.paid,
+        paid_via=contrib.paid_via,
+        paid_at=contrib.paid_at,
+        missed=contrib.missed,
+        pending_verification=contrib.pending_verification,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/contributions/{contribution_id}/reject — organizer rejects offline payment
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/contributions/{contribution_id}/reject", response_model=SusuContributionResponse)
+async def reject_offline_payment(
+    slug: str,
+    contribution_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    contrib_result = await db.execute(
+        select(SusuContribution)
+        .options(selectinload(SusuContribution.member), selectinload(SusuContribution.cycle))
+        .where(SusuContribution.id == contribution_id)
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib or contrib.cycle.group_id != group.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution not found")
+    if not contrib.pending_verification:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Contribution is not pending verification")
+
+    contrib.pending_verification = False
+    contrib.paid_via = None
+    contrib.paid_at = None
+
+    await db.commit()
+    await db.refresh(contrib)
+
+    return SusuContributionResponse(
+        id=contrib.id,
+        cycle_id=contrib.cycle_id,
+        member_id=contrib.member_id,
+        member_name=contrib.member.name if contrib.member else "Unknown",
+        amount=contrib.amount,
+        paid=contrib.paid,
+        paid_via=contrib.paid_via,
+        paid_at=contrib.paid_at,
+        missed=contrib.missed,
+        pending_verification=contrib.pending_verification,
+    )
 
 
 # ---------------------------------------------------------------------------

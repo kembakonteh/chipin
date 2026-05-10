@@ -205,6 +205,8 @@ class SusuContribution(Base, UUIDMixin):
     member: Mapped["SusuMember"] = relationship("SusuMember")
     # Feature 4: missed payment flag
     missed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Offline payment submitted by member, awaiting organizer confirmation
+    pending_verification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class SusuJoinRequest(Base, UUIDMixin):
