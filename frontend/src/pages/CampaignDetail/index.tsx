@@ -116,7 +116,7 @@ export default function CampaignDetail() {
         <ContributorsTab campaign={campaign} contributors={contributors} />
       )}
       {tab === 'settings' && (
-        <SettingsTab campaign={campaign} />
+        <SettingsTab campaign={campaign} contributors={contributors} />
       )}
     </Layout>
   )

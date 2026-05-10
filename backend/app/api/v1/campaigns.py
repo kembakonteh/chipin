@@ -6,7 +6,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from slugify import slugify
-from sqlalchemy import func, select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +18,9 @@ from app.models.beneficiary import Beneficiary
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.contributor import Contributor
 from app.models.org import Org, OrgMember
+from app.models.payment import Payment
+from app.models.payout import Payout
+from app.models.recurring import RecurringInstance, RecurringSchedule
 from app.models.template import CampaignTemplate
 from app.models.user import User
 from app.schemas.beneficiary import BeneficiaryResponse
@@ -220,13 +223,18 @@ async def delete_campaign_permanent(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Hard delete — removes campaign and all related data permanently."""
     campaign = await _get_campaign_or_404(slug, current_user.id, db)
-    await db.execute(
-        select(Campaign).where(Campaign.id == campaign.id)  # confirm ownership already done above
-    )
-    from sqlalchemy import delete as sa_delete
-    await db.execute(sa_delete(Campaign).where(Campaign.id == campaign.id))
+    cid = campaign.id
+    # Explicit cascade in dependency order — don't rely on DB-level ON DELETE CASCADE
+    # (Alembic-generated migrations may omit it). All deletes share the session
+    # transaction; any failure auto-rolls back via get_db.
+    await db.execute(sa_delete(Payment).where(Payment.campaign_id == cid))
+    await db.execute(sa_delete(Payout).where(Payout.campaign_id == cid))
+    await db.execute(sa_delete(RecurringInstance).where(RecurringInstance.campaign_id == cid))
+    await db.execute(sa_delete(RecurringSchedule).where(RecurringSchedule.campaign_id == cid))
+    await db.execute(sa_delete(Beneficiary).where(Beneficiary.campaign_id == cid))
+    await db.execute(sa_delete(Contributor).where(Contributor.campaign_id == cid))
+    await db.execute(sa_delete(Campaign).where(Campaign.id == cid))
     await db.commit()
 
 

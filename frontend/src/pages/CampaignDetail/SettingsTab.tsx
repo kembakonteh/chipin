@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
-import type { Campaign, CampaignType, Frequency, Org, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
+import type { Campaign, CampaignType, Contributor, Frequency, Org, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
 import { deadlineInfo } from '../../types'
 import CampaignTypeSelector from '../../components/CampaignTypeSelector'
 
@@ -47,9 +47,10 @@ function toForm(c: Campaign): Form {
 
 interface Props {
   campaign: Campaign
+  contributors: Contributor[]
 }
 
-export default function SettingsTab({ campaign }: Props) {
+export default function SettingsTab({ campaign, contributors }: Props) {
   const [form, setForm] = useState<Form>(toForm(campaign))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const qc = useQueryClient()
@@ -531,7 +532,9 @@ export default function SettingsTab({ campaign }: Props) {
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-red-300 font-medium">
-              Are you sure? All contributors, payments, and history will be gone forever.
+              This will permanently delete this campaign and all{' '}
+              <span className="font-bold">{contributors.length} contributor{contributors.length !== 1 ? 's' : ''}</span>
+              {' '}and their payment records. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
