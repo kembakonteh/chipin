@@ -20,6 +20,7 @@ import PayoutSettings from './pages/Settings/PayoutSettings'
 import ProfilePage from './pages/ProfilePage'
 import JoinOrg from './pages/JoinOrg'
 import CampaignsPage from './pages/CampaignsPage'
+import DeclinePage from './pages/DeclinePage'
 import InstallPrompt from './components/InstallPrompt'
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/settings/payout" element={<Protected><PayoutSettings /></Protected>} />
         <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
         <Route path="/p/:slug" element={<PublicCampaign />} />
+        <Route path="/p/:slug/decline" element={<DeclinePage />} />
         <Route path="/o/:slug" element={<PublicOrgPage />} />
         <Route path="/s/:slug" element={<PublicSusu />} />
         <Route path="/join/:token" element={<JoinOrg />} />

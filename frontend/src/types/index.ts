@@ -95,6 +95,7 @@ export type CampaignType = 'general' | 'memorial' | 'charity' | 'celebration'
 export type VisibilityMode = 'full_name' | 'first_name_only' | 'anonymous'
 export type CampaignStatus = 'active' | 'paused' | 'completed' | 'archived'
 export type PaidVia = 'card' | 'zelle' | 'cash' | 'cashapp' | 'manual'
+export type ContributorStatus = 'pending' | 'invited' | 'paid' | 'declined'
 export type OrgType = 'sports' | 'religious' | 'community' | 'professional' | 'social'
 export type OrgMemberRole = 'admin' | 'treasurer' | 'member'
 export type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual'
@@ -176,6 +177,7 @@ export interface Contributor {
   is_anonymous: boolean
   payment_note: string | null
   message: string | null
+  status: ContributorStatus
   created_at: string
   privacy_note: string | null
 }

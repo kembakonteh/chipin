@@ -6,9 +6,10 @@ from jwt.exceptions import InvalidTokenError
 
 from app.core.config import settings
 
-TokenType = Literal["magic", "access", "refresh"]
+TokenType = Literal["magic", "access", "refresh", "invite"]
 
 _MAGIC_EXPIRE_MINUTES = 15
+_INVITE_EXPIRE_DAYS = 30
 
 
 def _make_token(subject: str, token_type: TokenType, expires_delta: timedelta) -> str:
@@ -34,6 +35,21 @@ def create_refresh_token(user_id: str) -> str:
     return _make_token(
         user_id, "refresh", timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     )
+
+
+def create_invite_token(contributor_id: str, campaign_slug: str) -> str:
+    return _make_token(
+        f"{contributor_id}:{campaign_slug}", "invite", timedelta(days=_INVITE_EXPIRE_DAYS)
+    )
+
+
+def decode_invite_token(token: str) -> tuple[str, str]:
+    """Returns (contributor_id, campaign_slug) or raises ValueError."""
+    sub = decode_token(token, "invite")
+    parts = sub.split(":", 1)
+    if len(parts) != 2:
+        raise ValueError("Invalid invite token subject")
+    return parts[0], parts[1]
 
 
 def decode_token(token: str, expected_type: TokenType) -> str:

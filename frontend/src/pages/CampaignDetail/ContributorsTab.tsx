@@ -5,6 +5,7 @@ import { api } from '../../lib/api'
 import type { Campaign, Contributor } from '../../types'
 import ContributorRow from '../../components/ContributorRow'
 import ManualPayModal from '../../components/ManualPayModal'
+import InviteModal from '../../components/InviteModal'
 
 interface Props {
   campaign: Campaign
@@ -34,6 +35,7 @@ const PAY_METHODS: { value: PaidVia; label: string; icon: string }[] = [
 
 export default function ContributorsTab({ campaign, contributors }: Props) {
   const [payTarget, setPayTarget] = useState<Contributor | null>(null)
+  const [inviteTarget, setInviteTarget] = useState<Contributor | null | 'new'>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState<AddForm>(EMPTY_FORM)
   const [exporting, setExporting] = useState(false)
@@ -62,6 +64,8 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
 
   const paid = contributors.filter(c => c.paid)
   const unpaid = contributors.filter(c => !c.paid)
+  const invited = contributors.filter(c => c.status === 'invited' && !c.paid)
+  const declined = contributors.filter(c => c.status === 'declined')
 
   const addMutation = useMutation({
     mutationFn: () =>
@@ -125,10 +129,19 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
 
       {/* Actions bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
+        {/* Summary */}
         <p className="text-sm text-gray-400">
-          <span className="text-white font-medium">{paid.length}</span> paid ·{' '}
-          <span className="text-gray-500">{unpaid.length} unpaid</span>
+          <span className="text-white font-medium">{contributors.length}</span> total
+          {' '}—{' '}
+          <span className="text-brand-400">{paid.length} paid</span>
+          {invited.length > 0 && (
+            <> · <span className="text-sky-400">{invited.length} invited</span></>
+          )}
+          {declined.length > 0 && (
+            <> · <span className="text-gray-500">{declined.length} declined</span></>
+          )}
         </p>
+
         <div className="flex gap-2 flex-wrap">
           {unpaid.length > 0 && (
             <button
@@ -152,6 +165,14 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           </button>
           <button
             type="button"
+            onClick={() => { setInviteTarget('new'); setShowAdd(false) }}
+            className="rounded-lg border border-sky-700 bg-sky-700/20 px-3 py-1.5 text-xs
+              font-medium text-sky-300 hover:bg-sky-700/40 transition-colors"
+          >
+            📲 Invite Someone New
+          </button>
+          <button
+            type="button"
             onClick={() => setShowAdd(v => !v)}
             className="rounded-lg border border-brand-700 bg-brand-700/20 px-3 py-1.5 text-xs
               font-medium text-brand-300 hover:bg-brand-700/40 transition-colors"
@@ -169,7 +190,6 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
         >
           <p className="text-sm font-medium text-brand-200">Add contributor</p>
 
-          {/* Name + email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               value={form.name}
@@ -188,7 +208,6 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
             />
           </div>
 
-          {/* Phone */}
           <div>
             <input
               type="tel"
@@ -203,7 +222,6 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
             </p>
           </div>
 
-          {/* Amount + anonymous */}
           <div className="flex gap-3 items-center flex-wrap">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
@@ -230,7 +248,6 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
             </label>
           </div>
 
-          {/* Payment method */}
           <div className="space-y-2">
             <p className="text-xs text-gray-400">Already paid? Select method:</p>
             <div className="flex flex-wrap gap-2">
@@ -307,8 +324,9 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
                 <ContributorRow
                   key={c.id}
                   contributor={c}
-                  onMarkPaid={setPayTarget}
-                  onSendReminder={handleReminder}
+                  onMarkPaid={c.status !== 'declined' ? setPayTarget : undefined}
+                  onSendReminder={c.status !== 'declined' ? handleReminder : undefined}
+                  onInvite={setInviteTarget}
                 />
               ))}
             </>
@@ -321,6 +339,15 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           contributor={payTarget}
           campaignSlug={campaign.slug}
           onClose={() => setPayTarget(null)}
+        />
+      )}
+
+      {inviteTarget !== null && (
+        <InviteModal
+          campaign={campaign}
+          contributor={inviteTarget === 'new' ? null : inviteTarget}
+          onClose={() => setInviteTarget(null)}
+          onSuccess={() => {}}
         />
       )}
     </div>

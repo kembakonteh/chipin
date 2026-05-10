@@ -138,6 +138,34 @@ async def send_payment_confirmation(ctx: dict, *, contributor_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Invite helper — called directly from API (not via arq) so failures surface
+# ---------------------------------------------------------------------------
+
+async def send_invite_whatsapp(
+    *,
+    phone: str,
+    first_name: str,
+    organizer_name: str,
+    campaign_title: str,
+    custom_message: str,
+    payment_url: str,
+    decline_url: str,
+) -> bool:
+    """
+    Send chipin_invite template.
+    Params: {{1}} first_name, {{2}} organizer_name, {{3}} campaign_title,
+            {{4}} custom_message, {{5}} payment_url, {{6}} decline_url
+    Returns True on success, False on any failure.
+    """
+    logger.info("Sending invite to %s for campaign", phone)
+    return await _send_template(
+        phone=phone,
+        template_name="chipin_invite",
+        params=[first_name, organizer_name, campaign_title, custom_message, payment_url, decline_url],
+    )
+
+
+# ---------------------------------------------------------------------------
 # Task 2 — Single payment reminder
 # ---------------------------------------------------------------------------
 

@@ -6,7 +6,17 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, computed_field
 
 from app.models.campaign import CampaignType, VisibilityMode
-from app.models.contributor import PaidVia
+from app.models.contributor import ContributorStatus, PaidVia
+
+
+class InviteRequest(BaseModel):
+    custom_message: Optional[str] = None
+
+
+class InviteNewRequest(BaseModel):
+    name: str
+    phone: str
+    custom_message: Optional[str] = None
 
 
 class ContributorCreate(BaseModel):
@@ -51,6 +61,7 @@ class ContributorResponse(BaseModel):
     is_anonymous: bool
     payment_note: Optional[str]
     message: Optional[str]
+    status: ContributorStatus
     created_at: datetime
 
     @computed_field  # type: ignore[prop-decorator]

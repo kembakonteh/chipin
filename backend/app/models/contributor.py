@@ -23,6 +23,13 @@ class PaidVia(str, enum.Enum):
     manual = "manual"
 
 
+class ContributorStatus(str, enum.Enum):
+    pending = "pending"
+    invited = "invited"
+    paid = "paid"
+    declined = "declined"
+
+
 class Contributor(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "contributors"
 
@@ -43,6 +50,12 @@ class Contributor(Base, UUIDMixin, TimestampMixin):
     is_anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     payment_note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     message: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    status: Mapped[ContributorStatus] = mapped_column(
+        Enum(ContributorStatus, name="contributorstatus"),
+        nullable=False,
+        default=ContributorStatus.pending,
+        server_default="pending",
+    )
 
     campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="contributors")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="contributor")
