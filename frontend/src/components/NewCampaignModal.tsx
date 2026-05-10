@@ -55,6 +55,18 @@ const INIT_BEN: BeneficiaryForm = {
 
 type Step = 'template' | 'details' | 'beneficiary'
 
+const TITLE_PLACEHOLDERS: Record<string, string> = {
+  'Sports & Team Dues':        'e.g. Sunday League Spring Season Fund',
+  'Religious Collection':      'e.g. Mosque Ramadan Collection 2025',
+  'Funeral Repatriation':      'e.g. Repatriation Fund for Uncle Lamin',
+  'Wedding Gift Collection':   'e.g. Gift Collection for Sara & James',
+  'Baby Shower':               'e.g. Baby Shower Collection for Amie',
+  'Community Emergency Fund':  'e.g. Emergency Relief Fund for the Danso Family',
+  'Annual Association Dues':   'e.g. GASA Annual Dues 2025',
+  'Graduation Gift':           'e.g. Graduation Gift for Fatou',
+}
+const DEFAULT_TITLE_PLACEHOLDER = 'e.g. My Campaign'
+
 interface Props {
   onClose: () => void
   onCreated?: (c: Campaign) => void
@@ -68,6 +80,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   const [benForm, setBenForm] = useState<BeneficiaryForm>(INIT_BEN)
   const [createdCampaign, setCreatedCampaign] = useState<Campaign | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [titlePlaceholder, setTitlePlaceholder] = useState(DEFAULT_TITLE_PLACEHOLDER)
   const qc = useQueryClient()
 
   const { data: templates = [] } = useQuery<CampaignTemplate[]>({
@@ -98,6 +111,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
       allow_anonymous_contributions: t.default_anonymous,
       template_id: t.id,
     }))
+    setTitlePlaceholder(TITLE_PLACEHOLDERS[t.name] ?? DEFAULT_TITLE_PLACEHOLDER)
     setStep('details')
   }
 
@@ -249,7 +263,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => setStep('details')}
+              onClick={() => { setTitlePlaceholder(DEFAULT_TITLE_PLACEHOLDER); setStep('details') }}
               className="w-full rounded-xl border border-dashed border-gray-700 py-3 text-sm
                 text-gray-400 hover:text-white hover:border-gray-500 transition-colors"
             >
@@ -267,7 +281,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               <input
                 value={form.title}
                 onChange={e => setF('title', e.target.value)}
-                placeholder="e.g. Sunday League Fund"
+                placeholder={titlePlaceholder}
                 className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
                   text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
               />
