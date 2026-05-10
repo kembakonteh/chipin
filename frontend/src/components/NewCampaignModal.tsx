@@ -261,9 +261,21 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
         {/* Step 2: Details form */}
         {step === 'details' && (
           <form onSubmit={handleDetailsSubmit} className="p-6 space-y-5">
-            {/* Emoji + Title */}
-            <div className="flex gap-3">
-              <div className="w-16">
+            {/* Title — first field, nothing above it */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Title <span className="text-red-400">*</span></label>
+              <input
+                value={form.title}
+                onChange={e => setF('title', e.target.value)}
+                placeholder="e.g. Sunday League Fund"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Emoji + Description */}
+            <div className="flex gap-3 items-start">
+              <div className="w-16 shrink-0">
                 <label className="block text-xs text-gray-400 mb-1">Emoji</label>
                 <input
                   value={form.emoji}
@@ -274,38 +286,25 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">Title <span className="text-red-400">*</span></label>
-                <input
-                  autoFocus
-                  value={form.title}
-                  onChange={e => setF('title', e.target.value)}
-                  placeholder="e.g. Sunday League Fund"
+                <label className="block text-xs text-gray-400 mb-1">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={e => setF('description', e.target.value)}
+                  rows={2}
+                  placeholder={
+                    form.has_goal
+                      ? 'Optional details about this campaign…'
+                      : 'e.g. Members can contribute any amount they wish. Every bit helps!'
+                  }
                   className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
-                    text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                    text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
                 />
+                {!form.has_goal && !form.description && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tip: let contributors know what's expected — e.g. a minimum, a suggested amount, or just encourage them to give what they can.
+                  </p>
+                )}
               </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Description</label>
-              <textarea
-                value={form.description}
-                onChange={e => setF('description', e.target.value)}
-                rows={2}
-                placeholder={
-                  form.has_goal
-                    ? 'Optional details about this campaign…'
-                    : 'e.g. Members can contribute any amount they wish. Every bit helps!'
-                }
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
-                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
-              />
-              {!form.has_goal && !form.description && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Tip: let contributors know what's expected — e.g. a minimum, a suggested amount, or just encourage them to give what they can.
-                </p>
-              )}
             </div>
 
             {/* Campaign type — only shown when starting from scratch; templates set this automatically */}
