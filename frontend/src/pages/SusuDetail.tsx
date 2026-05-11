@@ -617,13 +617,15 @@ export default function SusuDetail() {
     const sorted = [...group.members].sort((a, b) => (a.payout_position ?? 999) - (b.payout_position ?? 999))
     const lines = sorted.map(m => paidIds.has(m.id) ? `✅ ${m.name} — Paid` : `⏳ ${m.name} — Pending`)
     const nextRecipient = cycle?.recipient_name ?? '—'
+    const payoutsCompleted = group.cycle_summaries.filter(c => c.status === 'paid_out').length
     const text = [
       `📊 *${group.name} — Standings*`,
       `Cycle ${group.current_cycle} of ${group.total_cycles}`,
       '',
       ...lines,
       '',
-      `🎁 Next payout: ${nextRecipient}`,
+      `🎁 Payouts completed: ${payoutsCompleted} of ${group.total_cycles}`,
+      `🔜 Next payout: ${nextRecipient}`,
       '',
       `View standings & pay: https://chipin.kafotech.io/s/${slug}/standings`,
     ].join('\n')
