@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
@@ -31,12 +31,15 @@ function CopyButton({ text }: { text: string }) {
 
 export default function SusuPayPage() {
   const { slug, member_id } = useParams<{ slug: string; member_id: string }>()
+  const [searchParams] = useSearchParams()
+  const isPartner = searchParams.get('partner') === '1'
+  const partnerParam = isPartner ? '?partner=1' : ''
   const [state, setState] = useState<PageState>('info')
   const [offlineMethod, setOfflineMethod] = useState<'cashapp' | 'zelle' | null>(null)
 
   const { data: info, isLoading } = useQuery<SusuPayPageInfo>({
-    queryKey: ['susu-pay-info', slug, member_id],
-    queryFn: () => api.get<SusuPayPageInfo>(`/s/${slug}/pay/${member_id}`).then(getData),
+    queryKey: ['susu-pay-info', slug, member_id, isPartner],
+    queryFn: () => api.get<SusuPayPageInfo>(`/s/${slug}/pay/${member_id}${partnerParam}`).then(getData),
   })
 
   useEffect(() => {
@@ -46,13 +49,13 @@ export default function SusuPayPage() {
   }, [info])
 
   const stripeCheckout = useMutation({
-    mutationFn: () => api.post<{ checkout_url: string }>(`/s/${slug}/pay/${member_id}/stripe`).then(getData),
+    mutationFn: () => api.post<{ checkout_url: string }>(`/s/${slug}/pay/${member_id}/stripe${partnerParam}`).then(getData),
     onSuccess: (d) => { window.location.href = d.checkout_url },
   })
 
   const offlinePay = useMutation({
     mutationFn: (paid_via: 'cashapp' | 'zelle') =>
-      api.post(`/s/${slug}/pay/${member_id}/offline`, { paid_via }).then(getData),
+      api.post(`/s/${slug}/pay/${member_id}/offline${partnerParam}`, { paid_via }).then(getData),
     onSuccess: () => setState('success'),
     onError: (err: any) => {
       const msg = err?.response?.data?.detail ?? 'Something went wrong'
@@ -175,11 +178,19 @@ export default function SusuPayPage() {
             Cycle {info.cycle_number} contribution for{' '}
             <span className="text-white font-medium">{info.member_name}</span>
           </p>
+          {info.is_split && info.split_partner_name && (
+            <p className="text-xs text-violet-300 mt-1.5 flex items-center justify-center gap-1">
+              <span>✂️</span>
+              <span>Splitting this hand with <strong>{info.split_partner_name}</strong></span>
+            </p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">Amount due</span>
+            <span className="text-sm text-gray-400">
+              {info.is_split ? 'Your share (split)' : 'Amount due'}
+            </span>
             <span className="text-2xl font-bold text-white">{fmt(parseFloat(info.amount))}</span>
           </div>
 

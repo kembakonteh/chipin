@@ -106,7 +106,10 @@ export default function SusuStandings() {
                     </span>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-white font-medium">{m.name}</span>
+                        <span className="text-sm text-white font-medium">
+                          {m.is_split && m.split_partner_name ? `${m.name} & ${m.split_partner_name}` : m.name}
+                        </span>
+                        {m.is_split && <span className="text-xs text-violet-400">✂️</span>}
                         {m.has_received_payout && (
                           <span className="text-xs text-purple-400" title="Has received payout">🏆</span>
                         )}
@@ -126,14 +129,39 @@ export default function SusuStandings() {
                     {m.payout_position != null && (
                       <div className="text-xs text-gray-600">#{m.payout_position}</div>
                     )}
-                    {data.status === 'active' && (
+                    {data.status === 'active' && m.is_split ? (
+                      <div className="flex flex-col gap-1 items-end">
+                        {!m.current_cycle_primary_paid && (
+                          <Link
+                            to={`/s/${slug}/pay/${m.id}`}
+                            className="text-xs px-2.5 py-1 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
+                          >
+                            {m.name} Pay
+                          </Link>
+                        )}
+                        {m.current_cycle_primary_paid && (
+                          <span className="text-xs text-emerald-500">✓ {m.name}</span>
+                        )}
+                        {!m.current_cycle_partner_paid && m.split_partner_name && (
+                          <Link
+                            to={`/s/${slug}/pay/${m.id}?partner=1`}
+                            className="text-xs px-2.5 py-1 rounded-lg bg-violet-700/30 text-violet-300 hover:bg-violet-700/50 border border-violet-700/40 transition-colors"
+                          >
+                            {m.split_partner_name} Pay
+                          </Link>
+                        )}
+                        {m.current_cycle_partner_paid && m.split_partner_name && (
+                          <span className="text-xs text-emerald-500">✓ {m.split_partner_name}</span>
+                        )}
+                      </div>
+                    ) : data.status === 'active' ? (
                       <Link
                         to={`/s/${slug}/pay/${m.id}`}
                         className="text-xs px-2.5 py-1 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
                       >
                         Pay Now
                       </Link>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}

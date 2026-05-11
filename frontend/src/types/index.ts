@@ -23,6 +23,10 @@ export interface SusuMember {
   total_contributed: string
   joined_at: string
   slots: number  // Feature 1: multiple slots/hands
+  is_split: boolean
+  split_partner_name: string | null
+  split_partner_phone: string | null
+  split_amount: string | null
 }
 
 export interface SusuContribution {
@@ -36,6 +40,10 @@ export interface SusuContribution {
   paid_at: string | null
   missed: boolean  // Feature 4: missed payment flag
   pending_verification: boolean
+  split_primary_paid: boolean
+  split_partner_paid: boolean
+  split_partner_paid_via: SusuPaidVia | null
+  split_partner_pending_verification: boolean
 }
 
 export interface SusuCycleSummary {
@@ -102,6 +110,9 @@ export interface SusuPayPageInfo {
   allow_zelle: boolean
   cashapp_handle: string | null
   zelle_handle: string | null
+  is_split: boolean
+  split_partner_name: string | null
+  is_partner_view: boolean
 }
 
 export interface SusuDetail extends SusuGroup {
@@ -131,6 +142,10 @@ export interface SusuMemberStanding {
   reliability_pct: number | null
   has_received_payout: boolean
   payout_position: number | null
+  is_split: boolean
+  split_partner_name: string | null
+  current_cycle_primary_paid: boolean
+  current_cycle_partner_paid: boolean
 }
 
 export interface SusuStandingsData {

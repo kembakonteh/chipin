@@ -150,6 +150,11 @@ class SusuMember(Base, UUIDMixin):
     )
     # Feature 1: multiple slots/hands
     slots: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    # Split hand: two people share one slot
+    is_split: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    split_partner_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    split_partner_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    split_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
 
     group: Mapped["SusuGroup"] = relationship("SusuGroup", back_populates="members")
 
@@ -207,6 +212,14 @@ class SusuContribution(Base, UUIDMixin):
     missed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # Offline payment submitted by member, awaiting organizer confirmation
     pending_verification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Split hand: track each partner's payment separately
+    split_primary_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    split_partner_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    split_partner_paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    split_partner_paid_via: Mapped[Optional[SusuPaidVia]] = mapped_column(
+        Enum(SusuPaidVia, name="susupaidvia"), nullable=True
+    )
+    split_partner_pending_verification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class SusuJoinRequest(Base, UUIDMixin):

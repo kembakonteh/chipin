@@ -369,28 +369,56 @@ async def _handle_susu_checkout_completed(session_obj: dict, db: AsyncSession) -
         return
 
     pi_id = session_obj.get("payment_intent")
-    contrib.paid = True
-    contrib.paid_via = SusuPaidVia.card
-    contrib.paid_at = datetime.now(timezone.utc)
+    is_partner = metadata.get("susu_is_partner") == "1"
+
     if pi_id:
         contrib.stripe_payment_intent_id = pi_id
 
-    # Update cycle collected_amount
+    # Load cycle and member
     cycle_result = await db.execute(select(SusuCycle).where(SusuCycle.id == contrib.cycle_id))
     cycle = cycle_result.scalar_one_or_none()
-    if cycle:
-        cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
-        if cycle.collected_amount >= cycle.pot_amount:
-            cycle.status = SusuCycleStatus.collected
-
-    # Update member total_contributed
     member_result = await db.execute(select(SusuMember).where(SusuMember.id == contrib.member_id))
     member = member_result.scalar_one_or_none()
-    if member:
-        member.total_contributed += contrib.amount
+
+    if is_partner and member and member.is_split:
+        # Partner's Stripe payment
+        split_amt = member.split_amount or Decimal("0")
+        contrib.split_partner_paid = True
+        contrib.split_partner_paid_via = SusuPaidVia.card
+        contrib.split_partner_paid_at = datetime.now(timezone.utc)
+        if cycle:
+            cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + split_amt
+        if member:
+            member.total_contributed += split_amt
+        if contrib.split_primary_paid:
+            contrib.paid = True
+    elif member and member.is_split:
+        # Primary's Stripe payment on a split hand
+        split_amt = member.split_amount or Decimal("0")
+        contrib.split_primary_paid = True
+        contrib.paid_via = SusuPaidVia.card
+        contrib.paid_at = datetime.now(timezone.utc)
+        if cycle:
+            cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + split_amt
+        if member:
+            member.total_contributed += split_amt
+        if contrib.split_partner_paid:
+            contrib.paid = True
+    else:
+        # Standard non-split payment
+        contrib.paid = True
+        contrib.paid_via = SusuPaidVia.card
+        contrib.paid_at = datetime.now(timezone.utc)
+        if cycle:
+            cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
+        if member:
+            member.total_contributed += contrib.amount
+
+    if cycle and cycle.collected_amount >= cycle.pot_amount:
+        cycle.status = SusuCycleStatus.collected
 
     await db.commit()
-    logger.info("Susu contribution %s marked paid via Stripe", contribution_id)
+    logger.info("Susu contribution %s marked paid via Stripe (partner=%s)", contribution_id, is_partner)
 
 
 async def _handle_payment_failed(pi_obj: dict, db: AsyncSession) -> None:

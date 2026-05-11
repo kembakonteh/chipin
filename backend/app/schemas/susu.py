@@ -47,6 +47,10 @@ class SusuMemberCreate(BaseModel):
     payout_position: Optional[int] = Field(None, ge=1)
     # Feature 1: multiple slots/hands
     slots: int = Field(1, ge=1, le=10)
+    # Split hand
+    is_split: bool = False
+    split_partner_name: Optional[str] = Field(None, max_length=255)
+    split_partner_phone: Optional[str] = Field(None, max_length=50)
 
 
 class SusuMemberUpdate(BaseModel):
@@ -73,6 +77,11 @@ class SusuMemberResponse(BaseModel):
     joined_at: datetime
     # Feature 1: multiple slots/hands
     slots: int = 1
+    # Split hand
+    is_split: bool = False
+    split_partner_name: Optional[str] = None
+    split_partner_phone: Optional[str] = None
+    split_amount: Optional[Decimal] = None
 
 
 class SusuContributionResponse(BaseModel):
@@ -89,6 +98,11 @@ class SusuContributionResponse(BaseModel):
     # Feature 4: missed flag
     missed: bool = False
     pending_verification: bool = False
+    # Split hand tracking
+    split_primary_paid: bool = False
+    split_partner_paid: bool = False
+    split_partner_paid_via: Optional[SusuPaidVia] = None
+    split_partner_pending_verification: bool = False
 
 
 class SusuCycleResponse(BaseModel):
@@ -189,6 +203,11 @@ class SusuMemberStanding(BaseModel):
     reliability_pct: Optional[int]
     has_received_payout: bool
     payout_position: Optional[int]
+    # Split hand
+    is_split: bool = False
+    split_partner_name: Optional[str] = None
+    current_cycle_primary_paid: bool = False
+    current_cycle_partner_paid: bool = False
 
 
 class SusuStandingsResponse(BaseModel):
@@ -247,6 +266,10 @@ class SusuPayPageInfo(BaseModel):
     allow_zelle: bool
     cashapp_handle: Optional[str]
     zelle_handle: Optional[str]
+    # Split hand
+    is_split: bool = False
+    split_partner_name: Optional[str] = None
+    is_partner_view: bool = False
 
 
 class SusuOfflinePayRequest(BaseModel):

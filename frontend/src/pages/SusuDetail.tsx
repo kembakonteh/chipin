@@ -37,11 +37,17 @@ function ContributionRow({
   cycleNumber,
   groupSlug,
   isCurrentCycle,
+  isSplit,
+  splitPartnerName,
+  splitAmount,
 }: {
   contribution: SusuContribution
   cycleNumber: number
   groupSlug: string
   isCurrentCycle: boolean
+  isSplit?: boolean
+  splitPartnerName?: string | null
+  splitAmount?: string | null
 }) {
   const qc = useQueryClient()
   const [payVia, setPayVia] = useState<SusuPaidVia>('cash')
@@ -75,9 +81,34 @@ function ContributionRow({
     onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to reject'),
   })
 
-  const isPending = contribution.pending_verification
+  const confirmPartnerPayment = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${groupSlug}/contributions/${contribution.id}/confirm-partner`).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to confirm partner'),
+  })
 
-  const rowClass = isPending
+  const rejectPartnerPayment = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${groupSlug}/contributions/${contribution.id}/reject-partner`).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to reject partner'),
+  })
+
+  const markPartnerPaid = useMutation({
+    mutationFn: () =>
+      api.post(`/susu/${groupSlug}/cycles/${cycleNumber}/members/${contribution.member_id}/mark-partner-paid`, {
+        paid_via: payVia,
+      }).then(getData),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['susu', groupSlug] }),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed to mark partner paid'),
+  })
+
+  const isPending = contribution.pending_verification
+  const isPartnerPending = contribution.split_partner_pending_verification
+
+  const anyPending = isPending || isPartnerPending
+  const rowClass = anyPending
     ? 'bg-amber-950 border border-amber-800'
     : contribution.missed
       ? 'bg-red-950 border border-red-800'
@@ -85,38 +116,52 @@ function ContributionRow({
         ? 'bg-emerald-950 border border-emerald-800'
         : 'bg-gray-800 border border-gray-700'
 
+  const splitHalf = splitAmount ? fmt(parseFloat(splitAmount)) : null
+
   return (
     <div className={`rounded-lg text-sm ${rowClass}`}>
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span className={`text-base ${contribution.paid ? 'text-emerald-400' : isPending ? 'text-amber-400' : contribution.missed ? 'text-red-400' : 'text-gray-600'}`}>
-            {contribution.paid ? '✓' : isPending ? '⏳' : contribution.missed ? '✗' : '○'}
+          <span className={`text-base ${contribution.paid ? 'text-emerald-400' : anyPending ? 'text-amber-400' : contribution.missed ? 'text-red-400' : 'text-gray-600'}`}>
+            {isSplit ? '✂️' : contribution.paid ? '✓' : isPending ? '⏳' : contribution.missed ? '✗' : '○'}
           </span>
-          <span className={contribution.paid ? 'text-white' : isPending ? 'text-amber-200' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
-            {contribution.member_name}
-          </span>
-          {isPending && (
+          <div>
+            <span className={contribution.paid ? 'text-white' : anyPending ? 'text-amber-200' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
+              {isSplit && splitPartnerName ? `${contribution.member_name} & ${splitPartnerName}` : contribution.member_name}
+            </span>
+            {isSplit && (
+              <div className="flex gap-3 mt-0.5">
+                <span className={`text-xs ${contribution.split_primary_paid ? 'text-emerald-400' : isPending ? 'text-amber-400' : 'text-gray-500'}`}>
+                  {contribution.split_primary_paid ? '✓' : isPending ? '⏳' : '○'} {contribution.member_name}{splitHalf ? ` ${splitHalf}` : ''}
+                </span>
+                <span className={`text-xs ${contribution.split_partner_paid ? 'text-emerald-400' : isPartnerPending ? 'text-amber-400' : 'text-gray-500'}`}>
+                  {contribution.split_partner_paid ? '✓' : isPartnerPending ? '⏳' : '○'} {splitPartnerName || 'Partner'}{splitHalf ? ` ${splitHalf}` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+          {!isSplit && isPending && (
             <span className="text-xs text-amber-400 font-medium">
               Pending · via {contribution.paid_via ?? '?'}
             </span>
           )}
-          {contribution.missed && !isPending && (
+          {contribution.missed && !anyPending && (
             <span className="text-xs text-red-400 font-medium">Missed</span>
           )}
-          {contribution.paid && contribution.paid_via && (
+          {contribution.paid && contribution.paid_via && !isSplit && (
             <span className="text-xs text-gray-500 capitalize">via {contribution.paid_via}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
           <span className={
             contribution.paid ? 'text-emerald-400 font-medium text-xs'
-            : isPending ? 'text-amber-400 text-xs'
+            : anyPending ? 'text-amber-400 text-xs'
             : contribution.missed ? 'text-red-400 text-xs'
             : 'text-gray-500 text-xs'
           }>
             {fmt(parseFloat(contribution.amount))}
           </span>
-          {!contribution.paid && !contribution.missed && !isPending && isCurrentCycle && (
+          {!contribution.paid && !contribution.missed && !anyPending && isCurrentCycle && (
             <div className="flex items-center gap-1">
               <select
                 value={payVia}
@@ -148,7 +193,7 @@ function ContributionRow({
         </div>
       </div>
 
-      {/* Pending verification: confirm / reject bar */}
+      {/* Primary pending verification bar */}
       {isPending && isCurrentCycle && (
         <div className="flex gap-2 px-3 pb-2.5">
           <button
@@ -156,7 +201,7 @@ function ContributionRow({
             disabled={confirmPayment.isPending || rejectPayment.isPending}
             className="flex-1 py-1.5 text-xs font-semibold rounded bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
           >
-            {confirmPayment.isPending ? 'Confirming…' : '✓ Confirm Receipt'}
+            {confirmPayment.isPending ? 'Confirming…' : `✓ Confirm${isSplit ? ` ${contribution.member_name}` : ''} Receipt`}
           </button>
           <button
             onClick={() => rejectPayment.mutate()}
@@ -164,6 +209,48 @@ function ContributionRow({
             className="flex-1 py-1.5 text-xs font-semibold rounded bg-red-900 text-red-200 hover:bg-red-800 disabled:opacity-50 transition-colors"
           >
             {rejectPayment.isPending ? 'Rejecting…' : '✗ Reject'}
+          </button>
+        </div>
+      )}
+
+      {/* Partner pending verification bar */}
+      {isPartnerPending && isCurrentCycle && (
+        <div className="flex gap-2 px-3 pb-2.5">
+          <button
+            onClick={() => confirmPartnerPayment.mutate()}
+            disabled={confirmPartnerPayment.isPending || rejectPartnerPayment.isPending}
+            className="flex-1 py-1.5 text-xs font-semibold rounded bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          >
+            {confirmPartnerPayment.isPending ? 'Confirming…' : `✓ Confirm ${splitPartnerName || 'Partner'} Receipt`}
+          </button>
+          <button
+            onClick={() => rejectPartnerPayment.mutate()}
+            disabled={confirmPartnerPayment.isPending || rejectPartnerPayment.isPending}
+            className="flex-1 py-1.5 text-xs font-semibold rounded bg-red-900 text-red-200 hover:bg-red-800 disabled:opacity-50 transition-colors"
+          >
+            {rejectPartnerPayment.isPending ? 'Rejecting…' : '✗ Reject'}
+          </button>
+        </div>
+      )}
+
+      {/* Split: show "Mark partner paid" when primary confirmed but partner not */}
+      {isSplit && !contribution.paid && !contribution.split_partner_paid && !isPartnerPending && contribution.split_primary_paid && isCurrentCycle && (
+        <div className="flex gap-2 px-3 pb-2.5">
+          <select
+            value={payVia}
+            onChange={e => setPayVia(e.target.value as SusuPaidVia)}
+            className="rounded bg-gray-700 border border-gray-600 text-xs text-gray-300 px-1 py-1 focus:outline-none"
+          >
+            {PAID_VIA_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => markPartnerPaid.mutate()}
+            disabled={markPartnerPaid.isPending}
+            className="flex-1 py-1.5 text-xs font-semibold rounded bg-brand-700 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+          >
+            {markPartnerPaid.isPending ? '…' : `Mark ${splitPartnerName || 'Partner'} paid`}
           </button>
         </div>
       )}
@@ -415,6 +502,9 @@ interface AddMemberForm {
   phone: string
   email: string
   slots: string
+  isSplit: boolean
+  splitPartnerName: string
+  splitPartnerPhone: string
 }
 
 export default function SusuDetail() {
@@ -423,7 +513,7 @@ export default function SusuDetail() {
   const qc = useQueryClient()
   const [tab, setTab] = useState<DetailTab>('current')
   const [showAdd, setShowAdd] = useState(false)
-  const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '', slots: '1' })
+  const [addForm, setAddForm] = useState<AddMemberForm>({ name: '', phone: '', email: '', slots: '1', isSplit: false, splitPartnerName: '', splitPartnerPhone: '' })
   const [addError, setAddError] = useState('')
   const [showPayoutModal, setShowPayoutModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -441,10 +531,13 @@ export default function SusuDetail() {
         phone: addForm.phone.trim(),
         email: addForm.email.trim() || null,
         slots: parseInt(addForm.slots) || 1,
+        is_split: addForm.isSplit,
+        split_partner_name: addForm.isSplit ? addForm.splitPartnerName.trim() || null : null,
+        split_partner_phone: addForm.isSplit ? addForm.splitPartnerPhone.trim() || null : null,
       }).then(getData),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['susu', slug] })
-      setAddForm({ name: '', phone: '', email: '', slots: '1' })
+      setAddForm({ name: '', phone: '', email: '', slots: '1', isSplit: false, splitPartnerName: '', splitPartnerPhone: '' })
       setAddError('')
       setShowAdd(false)
     },
@@ -807,15 +900,21 @@ export default function SusuDetail() {
             </div>
 
             <div className="space-y-2">
-              {cycle.contributions.map(c => (
-                <ContributionRow
-                  key={c.id}
-                  contribution={c}
-                  cycleNumber={cycle.cycle_number}
-                  groupSlug={slug!}
-                  isCurrentCycle={true}
-                />
-              ))}
+              {cycle.contributions.map(c => {
+                const mem = group.members.find(m => m.id === c.member_id)
+                return (
+                  <ContributionRow
+                    key={c.id}
+                    contribution={c}
+                    cycleNumber={cycle.cycle_number}
+                    groupSlug={slug!}
+                    isCurrentCycle={true}
+                    isSplit={mem?.is_split}
+                    splitPartnerName={mem?.split_partner_name}
+                    splitAmount={mem?.split_amount}
+                  />
+                )
+              })}
             </div>
 
             {/* Mark payout sent */}
@@ -997,6 +1096,44 @@ export default function SusuDetail() {
                     />
                   </div>
                 </div>
+                {/* Split hand toggle */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addForm.isSplit}
+                    onChange={e => setAddForm(f => ({ ...f, isSplit: e.target.checked }))}
+                    className="w-4 h-4 accent-violet-500"
+                  />
+                  <span className="text-xs text-gray-300">✂️ Split this hand? (two people share one slot)</span>
+                </label>
+                {addForm.isSplit && (
+                  <div className="rounded-lg border border-violet-800 bg-violet-950/30 p-3 space-y-2">
+                    <p className="text-xs text-violet-300 font-medium">Split partner details</p>
+                    {group && (
+                      <p className="text-xs text-gray-400">
+                        Each person pays {fmt(parseFloat(group.contribution_amount) / 2)} (half of {fmt(parseFloat(group.contribution_amount))})
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Partner name *"
+                        value={addForm.splitPartnerName}
+                        onChange={e => setAddForm(f => ({ ...f, splitPartnerName: e.target.value }))}
+                        className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
+                          text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="Partner phone"
+                        value={addForm.splitPartnerPhone}
+                        onChange={e => setAddForm(f => ({ ...f, splitPartnerPhone: e.target.value }))}
+                        className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2
+                          text-sm text-white placeholder-gray-600 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
                 {addError && <p className="text-xs text-red-400">{addError}</p>}
                 <button
                   type="submit"
@@ -1029,9 +1166,16 @@ export default function SusuDetail() {
                       )}
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm text-white font-medium">{m.name}</span>
+                          <span className="text-sm text-white font-medium">
+                            {m.is_split && m.split_partner_name ? `${m.name} & ${m.split_partner_name}` : m.name}
+                          </span>
+                          {m.is_split && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-900/40 text-violet-300 border border-violet-800/40">
+                              ✂️ split
+                            </span>
+                          )}
                           {/* Feature 1: slots badge */}
-                          {m.slots > 1 && (
+                          {m.slots > 1 && !m.is_split && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-900/40 text-brand-300 border border-brand-800/40">
                               {m.slots} hands
                             </span>

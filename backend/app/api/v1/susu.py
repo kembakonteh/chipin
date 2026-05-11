@@ -104,8 +104,12 @@ def _build_cycle_response(cycle: SusuCycle) -> SusuCycleResponse:
             paid=c.paid,
             paid_via=c.paid_via,
             paid_at=c.paid_at,
-            missed=c.missed,  # Feature 4
+            missed=c.missed,
             pending_verification=c.pending_verification,
+            split_primary_paid=c.split_primary_paid,
+            split_partner_paid=c.split_partner_paid,
+            split_partner_paid_via=c.split_partner_paid_via,
+            split_partner_pending_verification=c.split_partner_pending_verification,
         )
         for c in cycle.contributions
     ]
@@ -131,7 +135,13 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
 
     current_cycle_detail = None
     summaries = []
-    recipient_map = {m.id: m.name for m in group.members}
+    # For split members, show "Primary & Partner (split)" as recipient name
+    recipient_map = {}
+    for m in group.members:
+        if m.is_split and m.split_partner_name:
+            recipient_map[m.id] = f"{m.name} & {m.split_partner_name} (split)"
+        else:
+            recipient_map[m.id] = m.name
 
     for cycle in group.cycles:
         rname = recipient_map.get(cycle.recipient_member_id, "Unknown")
@@ -430,13 +440,21 @@ async def add_susu_member(
     if body.phone in existing_phones:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Member with this phone already exists in group")
 
+    split_amount = None
+    if body.is_split:
+        split_amount = group.contribution_amount / 2
+
     member = SusuMember(
         group_id=group.id,
         name=body.name,
         phone=body.phone,
         email=body.email,
         payout_position=body.payout_position,
-        slots=body.slots,  # Feature 1: multiple slots/hands
+        slots=body.slots,
+        is_split=body.is_split,
+        split_partner_name=body.split_partner_name if body.is_split else None,
+        split_partner_phone=body.split_partner_phone if body.is_split else None,
+        split_amount=split_amount,
     )
     db.add(member)
     group.total_members += 1
@@ -640,26 +658,42 @@ async def mark_contribution_paid(
     if not contrib:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution record not found for member")
 
-    already_counted = contrib.pending_verification  # pending_verification means amount was NOT yet counted
-    contrib.paid = True
-    contrib.paid_via = body.paid_via
-    contrib.paid_at = datetime.now(timezone.utc)
-    contrib.pending_verification = False
+    member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
+    member = member_result.scalar_one_or_none()
 
-    if not already_counted:
-        # Update cycle collected amount
-        cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
+    if member and member.is_split:
+        # For split: organiser "mark paid" marks BOTH halves at once.
+        # Calculate how much still needs to be added (avoid double-counting already-confirmed halves).
+        already_collected = (
+            (member.split_amount if contrib.split_primary_paid else Decimal("0")) +
+            (member.split_amount if contrib.split_partner_paid else Decimal("0"))
+        )
+        amount_to_add = contrib.amount - already_collected
 
-        # Update member total
-        member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
-        member = member_result.scalar_one_or_none()
+        contrib.split_primary_paid = True
+        contrib.split_partner_paid = True
+        contrib.paid = True
+        contrib.paid_via = body.paid_via
+        contrib.paid_at = datetime.now(timezone.utc)
+        contrib.pending_verification = False
+        contrib.split_partner_pending_verification = False
+
+        cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + amount_to_add
         if member:
-            member.total_contributed += contrib.amount
+            member.total_contributed += amount_to_add
     else:
-        member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
-        member = member_result.scalar_one_or_none()
+        already_counted = contrib.pending_verification
+        contrib.paid = True
+        contrib.paid_via = body.paid_via
+        contrib.paid_at = datetime.now(timezone.utc)
+        contrib.pending_verification = False
 
-    # Auto-collect cycle if all paid
+        if not already_counted:
+            cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + contrib.amount
+            if member:
+                member.total_contributed += contrib.amount
+
+    # Auto-collect cycle if all contributions are fully paid
     unpaid = [c for c in cycle.contributions if not c.paid]
     if not unpaid:
         cycle.status = SusuCycleStatus.collected
@@ -677,6 +711,10 @@ async def mark_contribution_paid(
         paid_via=contrib.paid_via,
         paid_at=contrib.paid_at,
         pending_verification=contrib.pending_verification,
+        split_primary_paid=contrib.split_primary_paid,
+        split_partner_paid=contrib.split_partner_paid,
+        split_partner_paid_via=contrib.split_partner_paid_via,
+        split_partner_pending_verification=contrib.split_partner_pending_verification,
     )
 
 
@@ -1170,6 +1208,7 @@ async def update_susu_settings(
 async def get_susu_pay_info(
     slug: str,
     member_id: uuid.UUID,
+    partner: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
@@ -1200,16 +1239,36 @@ async def get_susu_pay_info(
         )
     )
     contrib = contrib_result.scalar_one_or_none()
-    already_paid = contrib.paid if contrib else False
-    pending_verification = (contrib.pending_verification if contrib else False)
-    pending_paid_via = (contrib.paid_via.value if contrib and contrib.pending_verification and contrib.paid_via else None)
-    amount = contrib.amount if contrib else member.slots * group.contribution_amount
+
+    if partner and member.is_split:
+        # Partner's view: show split_amount, check partner-specific fields
+        display_name = member.split_partner_name or "Partner"
+        partner_name = member.name  # from partner's perspective, partner_name is the primary
+        amount = member.split_amount or (group.contribution_amount / 2)
+        already_paid = contrib.split_partner_paid if contrib else False
+        pending_verification = contrib.split_partner_pending_verification if contrib else False
+        pending_paid_via = (
+            contrib.split_partner_paid_via.value
+            if contrib and contrib.split_partner_pending_verification and contrib.split_partner_paid_via
+            else None
+        )
+    else:
+        display_name = member.name
+        partner_name = member.split_partner_name if member.is_split else None
+        amount = (member.split_amount or (group.contribution_amount / 2)) if member.is_split else (
+            contrib.amount if contrib else member.slots * group.contribution_amount
+        )
+        already_paid = contrib.split_primary_paid if (contrib and member.is_split) else (contrib.paid if contrib else False)
+        pending_verification = contrib.pending_verification if contrib else False
+        pending_paid_via = (
+            contrib.paid_via.value if contrib and contrib.pending_verification and contrib.paid_via else None
+        )
 
     return SusuPayPageInfo(
         group_name=group.name,
         slug=group.slug,
         member_id=str(member.id),
-        member_name=member.name,
+        member_name=display_name,
         cycle_number=group.current_cycle,
         amount=amount,
         already_paid=already_paid,
@@ -1220,6 +1279,9 @@ async def get_susu_pay_info(
         allow_zelle=group.allow_zelle,
         cashapp_handle=group.cashapp_handle,
         zelle_handle=group.zelle_handle,
+        is_split=member.is_split,
+        split_partner_name=partner_name,
+        is_partner_view=partner and member.is_split,
     )
 
 
@@ -1231,6 +1293,7 @@ async def get_susu_pay_info(
 async def susu_member_stripe_pay(
     slug: str,
     member_id: uuid.UUID,
+    partner: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -1267,12 +1330,23 @@ async def susu_member_stripe_pay(
     contrib = contrib_result.scalar_one_or_none()
     if not contrib:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No contribution record for this member")
-    if contrib.paid:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
-
-    amount_cents = int(member.slots * group.contribution_amount * 100)
-    success_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}?paid=1"
-    cancel_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}"
+    if partner and member.is_split:
+        if contrib.split_partner_paid:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Partner already paid for this cycle")
+        amount_cents = int((member.split_amount or group.contribution_amount / 2) * 100)
+        payer_name = member.split_partner_name or "Partner"
+        success_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}?partner=1&paid=1"
+        cancel_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}?partner=1"
+        is_partner_payment = True
+    else:
+        already_paid = contrib.split_primary_paid if member.is_split else contrib.paid
+        if already_paid:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
+        amount_cents = int((member.split_amount or member.slots * group.contribution_amount) * 100) if member.is_split else int(member.slots * group.contribution_amount * 100)
+        payer_name = member.name
+        success_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}?paid=1"
+        cancel_url = f"{settings.FRONTEND_URL}/s/{slug}/pay/{member_id}"
+        is_partner_payment = False
 
     session_params: dict = {
         "mode": "payment",
@@ -1282,7 +1356,7 @@ async def susu_member_stripe_pay(
                 "unit_amount": amount_cents,
                 "product_data": {
                     "name": f"{group.name} — Cycle {group.current_cycle} contribution",
-                    "description": f"Susu contribution for {member.name}",
+                    "description": f"Susu contribution for {payer_name}",
                 },
             },
             "quantity": 1,
@@ -1293,6 +1367,7 @@ async def susu_member_stripe_pay(
             "susu_contribution_id": str(contrib.id),
             "susu_group_id": str(group.id),
             "susu_member_id": str(member.id),
+            "susu_is_partner": "1" if is_partner_payment else "0",
         },
     }
     if member.email:
@@ -1319,6 +1394,7 @@ async def susu_member_offline_pay(
     slug: str,
     member_id: uuid.UUID,
     body: SusuOfflinePayRequest,
+    partner: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
@@ -1356,7 +1432,22 @@ async def susu_member_offline_pay(
     contrib = contrib_result.scalar_one_or_none()
     if not contrib:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No contribution record for this member")
-    if contrib.paid:
+
+    if partner and member.is_split:
+        if contrib.split_partner_paid:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Partner already paid for this cycle")
+        if contrib.split_partner_pending_verification:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Partner payment already submitted and awaiting organiser confirmation")
+        display_amount = str(member.split_amount or group.contribution_amount / 2)
+        contrib.split_partner_pending_verification = True
+        contrib.split_partner_paid_via = body.paid_via
+        contrib.split_partner_paid_at = datetime.now(timezone.utc)
+        await db.commit()
+        return {"pending_verification": True, "amount": display_amount, "paid_via": body.paid_via.value}
+
+    # Primary payment
+    primary_already_paid = contrib.split_primary_paid if member.is_split else contrib.paid
+    if primary_already_paid:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already paid for this cycle")
     if contrib.pending_verification:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Payment already submitted and awaiting organiser confirmation")
@@ -1365,8 +1456,9 @@ async def susu_member_offline_pay(
     contrib.paid_via = body.paid_via
     contrib.paid_at = datetime.now(timezone.utc)
 
+    display_amount = str(member.split_amount or group.contribution_amount / 2) if member.is_split else str(contrib.amount)
     await db.commit()
-    return {"pending_verification": True, "amount": str(contrib.amount), "paid_via": body.paid_via.value}
+    return {"pending_verification": True, "amount": display_amount, "paid_via": body.paid_via.value}
 
 
 # ---------------------------------------------------------------------------
@@ -1398,17 +1490,25 @@ async def confirm_offline_payment(
     if not contrib.pending_verification:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Contribution is not pending verification")
 
-    contrib.paid = True
     contrib.pending_verification = False
     if not contrib.paid_at:
         contrib.paid_at = datetime.now(timezone.utc)
 
-    contrib.cycle.collected_amount = (contrib.cycle.collected_amount or Decimal("0")) + contrib.amount
-
     member_result = await db.execute(select(SusuMember).where(SusuMember.id == contrib.member_id))
     member = member_result.scalar_one_or_none()
-    if member:
-        member.total_contributed += contrib.amount
+
+    if member and member.is_split:
+        # Confirm primary's half only; mark fully paid only when partner also confirmed
+        contrib.split_primary_paid = True
+        contrib.cycle.collected_amount = (contrib.cycle.collected_amount or Decimal("0")) + member.split_amount
+        member.total_contributed += member.split_amount
+        if contrib.split_partner_paid:
+            contrib.paid = True
+    else:
+        contrib.paid = True
+        contrib.cycle.collected_amount = (contrib.cycle.collected_amount or Decimal("0")) + contrib.amount
+        if member:
+            member.total_contributed += contrib.amount
 
     all_contribs_result = await db.execute(
         select(SusuContribution).where(SusuContribution.cycle_id == contrib.cycle_id, SusuContribution.paid == False)
@@ -1430,6 +1530,10 @@ async def confirm_offline_payment(
         paid_at=contrib.paid_at,
         missed=contrib.missed,
         pending_verification=contrib.pending_verification,
+        split_primary_paid=contrib.split_primary_paid,
+        split_partner_paid=contrib.split_partner_paid,
+        split_partner_paid_via=contrib.split_partner_paid_via,
+        split_partner_pending_verification=contrib.split_partner_pending_verification,
     )
 
 
@@ -1480,6 +1584,209 @@ async def reject_offline_payment(
         paid_at=contrib.paid_at,
         missed=contrib.missed,
         pending_verification=contrib.pending_verification,
+        split_primary_paid=contrib.split_primary_paid,
+        split_partner_paid=contrib.split_partner_paid,
+        split_partner_paid_via=contrib.split_partner_paid_via,
+        split_partner_pending_verification=contrib.split_partner_pending_verification,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/contributions/{contribution_id}/confirm-partner — organizer confirms partner's offline payment
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/contributions/{contribution_id}/confirm-partner", response_model=SusuContributionResponse)
+async def confirm_partner_payment(
+    slug: str,
+    contribution_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    contrib_result = await db.execute(
+        select(SusuContribution)
+        .options(selectinload(SusuContribution.member), selectinload(SusuContribution.cycle))
+        .where(SusuContribution.id == contribution_id)
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib or contrib.cycle.group_id != group.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution not found")
+    if not contrib.split_partner_pending_verification:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Partner payment is not pending verification")
+
+    member_result = await db.execute(select(SusuMember).where(SusuMember.id == contrib.member_id))
+    member = member_result.scalar_one_or_none()
+    if not member or not member.is_split:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Member is not a split hand")
+
+    contrib.split_partner_paid = True
+    contrib.split_partner_pending_verification = False
+    if not contrib.split_partner_paid_at:
+        contrib.split_partner_paid_at = datetime.now(timezone.utc)
+
+    contrib.cycle.collected_amount = (contrib.cycle.collected_amount or Decimal("0")) + member.split_amount
+    member.total_contributed += member.split_amount
+
+    if contrib.split_primary_paid:
+        contrib.paid = True
+
+    all_contribs_result = await db.execute(
+        select(SusuContribution).where(SusuContribution.cycle_id == contrib.cycle_id, SusuContribution.paid == False)
+    )
+    if not all_contribs_result.scalars().first():
+        contrib.cycle.status = SusuCycleStatus.collected
+
+    await db.commit()
+    await db.refresh(contrib)
+
+    return SusuContributionResponse(
+        id=contrib.id,
+        cycle_id=contrib.cycle_id,
+        member_id=contrib.member_id,
+        member_name=contrib.member.name if contrib.member else "Unknown",
+        amount=contrib.amount,
+        paid=contrib.paid,
+        paid_via=contrib.paid_via,
+        paid_at=contrib.paid_at,
+        missed=contrib.missed,
+        pending_verification=contrib.pending_verification,
+        split_primary_paid=contrib.split_primary_paid,
+        split_partner_paid=contrib.split_partner_paid,
+        split_partner_paid_via=contrib.split_partner_paid_via,
+        split_partner_pending_verification=contrib.split_partner_pending_verification,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/contributions/{contribution_id}/reject-partner
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/contributions/{contribution_id}/reject-partner", response_model=SusuContributionResponse)
+async def reject_partner_payment(
+    slug: str,
+    contribution_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    contrib_result = await db.execute(
+        select(SusuContribution)
+        .options(selectinload(SusuContribution.member), selectinload(SusuContribution.cycle))
+        .where(SusuContribution.id == contribution_id)
+    )
+    contrib = contrib_result.scalar_one_or_none()
+    if not contrib or contrib.cycle.group_id != group.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution not found")
+    if not contrib.split_partner_pending_verification:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Partner payment is not pending verification")
+
+    contrib.split_partner_pending_verification = False
+    contrib.split_partner_paid_via = None
+    contrib.split_partner_paid_at = None
+
+    await db.commit()
+    await db.refresh(contrib)
+
+    return SusuContributionResponse(
+        id=contrib.id,
+        cycle_id=contrib.cycle_id,
+        member_id=contrib.member_id,
+        member_name=contrib.member.name if contrib.member else "Unknown",
+        amount=contrib.amount,
+        paid=contrib.paid,
+        paid_via=contrib.paid_via,
+        paid_at=contrib.paid_at,
+        missed=contrib.missed,
+        pending_verification=contrib.pending_verification,
+        split_primary_paid=contrib.split_primary_paid,
+        split_partner_paid=contrib.split_partner_paid,
+        split_partner_paid_via=contrib.split_partner_paid_via,
+        split_partner_pending_verification=contrib.split_partner_pending_verification,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /susu/{slug}/cycles/{cycle_number}/members/{member_id}/mark-partner-paid
+# ---------------------------------------------------------------------------
+
+@router.post("/susu/{slug}/cycles/{cycle_number}/members/{member_id}/mark-partner-paid", response_model=SusuContributionResponse)
+async def mark_partner_paid(
+    slug: str,
+    cycle_number: int,
+    member_id: uuid.UUID,
+    body: MarkPaidRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(SusuGroup).where(SusuGroup.slug == slug))
+    group = result.scalar_one_or_none()
+    if not group or group.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+    cycle_result = await db.execute(
+        select(SusuCycle)
+        .options(selectinload(SusuCycle.contributions).selectinload(SusuContribution.member))
+        .where(SusuCycle.group_id == group.id, SusuCycle.cycle_number == cycle_number)
+    )
+    cycle = cycle_result.scalar_one_or_none()
+    if not cycle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cycle not found")
+
+    contrib = next((c for c in cycle.contributions if c.member_id == member_id), None)
+    if not contrib:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contribution record not found")
+
+    member_result = await db.execute(select(SusuMember).where(SusuMember.id == member_id))
+    member = member_result.scalar_one_or_none()
+    if not member or not member.is_split:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Member is not a split hand")
+
+    if not contrib.split_partner_paid:
+        cycle.collected_amount = (cycle.collected_amount or Decimal("0")) + member.split_amount
+        member.total_contributed += member.split_amount
+
+    contrib.split_partner_paid = True
+    contrib.split_partner_paid_via = body.paid_via
+    contrib.split_partner_paid_at = datetime.now(timezone.utc)
+    contrib.split_partner_pending_verification = False
+
+    if contrib.split_primary_paid:
+        contrib.paid = True
+
+    unpaid = [c for c in cycle.contributions if not c.paid]
+    if not unpaid:
+        cycle.status = SusuCycleStatus.collected
+
+    await db.commit()
+    await db.refresh(contrib)
+
+    return SusuContributionResponse(
+        id=contrib.id,
+        cycle_id=contrib.cycle_id,
+        member_id=contrib.member_id,
+        member_name=contrib.member.name if contrib.member else "Unknown",
+        amount=contrib.amount,
+        paid=contrib.paid,
+        paid_via=contrib.paid_via,
+        paid_at=contrib.paid_at,
+        missed=contrib.missed,
+        pending_verification=contrib.pending_verification,
+        split_primary_paid=contrib.split_primary_paid,
+        split_partner_paid=contrib.split_partner_paid,
+        split_partner_paid_via=contrib.split_partner_paid_via,
+        split_partner_pending_verification=contrib.split_partner_pending_verification,
     )
 
 
@@ -1603,6 +1910,7 @@ async def public_susu_standings(
     group = await _get_group_or_404(slug, db)
 
     cycles_sorted = sorted(group.cycles, key=lambda c: c.cycle_number)
+    current_cycle_obj = next((c for c in cycles_sorted if c.cycle_number == group.current_cycle), None)
     standings = []
     for m in group.members:
         due_so_far = 0
@@ -1613,6 +1921,16 @@ async def public_susu_standings(
                 if any(c.member_id == m.id and c.paid for c in cycle.contributions):
                     paid_cycles += 1
         reliability_pct = round((paid_cycles / due_so_far) * 100) if due_so_far > 0 else None
+
+        # Split: check current cycle payment status for each partner
+        current_primary_paid = False
+        current_partner_paid = False
+        if current_cycle_obj:
+            contrib = next((c for c in current_cycle_obj.contributions if c.member_id == m.id), None)
+            if contrib:
+                current_primary_paid = contrib.split_primary_paid if m.is_split else contrib.paid
+                current_partner_paid = contrib.split_partner_paid if m.is_split else False
+
         standings.append(SusuMemberStanding(
             id=m.id,
             name=m.name,
@@ -1621,6 +1939,10 @@ async def public_susu_standings(
             reliability_pct=reliability_pct,
             has_received_payout=m.has_received_payout,
             payout_position=m.payout_position,
+            is_split=m.is_split,
+            split_partner_name=m.split_partner_name,
+            current_cycle_primary_paid=current_primary_paid,
+            current_cycle_partner_paid=current_partner_paid,
         ))
 
     standings.sort(key=lambda s: s.total_contributed, reverse=True)
