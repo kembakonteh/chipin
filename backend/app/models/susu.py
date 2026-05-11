@@ -115,6 +115,8 @@ class SusuGroup(Base, UUIDMixin):
     allow_zelle: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     cashapp_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     zelle_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Recipient exemption policy
+    recipient_must_pay: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     owner: Mapped["User"] = relationship("User")
     org: Mapped[Optional["Org"]] = relationship("Org")
@@ -212,6 +214,8 @@ class SusuContribution(Base, UUIDMixin):
     missed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # Offline payment submitted by member, awaiting organizer confirmation
     pending_verification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Recipient exemption: contribution automatically marked paid/exempt
+    is_exempt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # Split hand: track each partner's payment separately
     split_primary_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     split_partner_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

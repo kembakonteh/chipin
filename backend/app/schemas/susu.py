@@ -28,6 +28,8 @@ class SusuGroupCreate(BaseModel):
     allow_zelle: bool = False
     cashapp_handle: Optional[str] = Field(None, max_length=100)
     zelle_handle: Optional[str] = Field(None, max_length=100)
+    # Recipient exemption policy
+    recipient_must_pay: bool = True
 
 
 class SusuGroupUpdate(BaseModel):
@@ -98,6 +100,8 @@ class SusuContributionResponse(BaseModel):
     # Feature 4: missed flag
     missed: bool = False
     pending_verification: bool = False
+    # Recipient exemption
+    is_exempt: bool = False
     # Split hand tracking
     split_primary_paid: bool = False
     split_partner_paid: bool = False
@@ -169,6 +173,8 @@ class SusuGroupResponse(BaseModel):
     allow_zelle: bool = False
     cashapp_handle: Optional[str] = None
     zelle_handle: Optional[str] = None
+    # Recipient exemption policy
+    recipient_must_pay: bool = True
 
 
 class SusuDetailResponse(SusuGroupResponse):
@@ -208,6 +214,7 @@ class SusuMemberStanding(BaseModel):
     split_partner_name: Optional[str] = None
     current_cycle_primary_paid: bool = False
     current_cycle_partner_paid: bool = False
+    current_cycle_is_exempt: bool = False
 
 
 class SusuStandingsResponse(BaseModel):
@@ -249,6 +256,7 @@ class SusuPaymentSettingsUpdate(BaseModel):
     allow_zelle: Optional[bool] = None
     cashapp_handle: Optional[str] = Field(None, max_length=100)
     zelle_handle: Optional[str] = Field(None, max_length=100)
+    recipient_must_pay: Optional[bool] = None
 
 
 class SusuPayPageInfo(BaseModel):

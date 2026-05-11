@@ -106,6 +106,7 @@ def _build_cycle_response(cycle: SusuCycle) -> SusuCycleResponse:
             paid_at=c.paid_at,
             missed=c.missed,
             pending_verification=c.pending_verification,
+            is_exempt=c.is_exempt,
             split_primary_paid=c.split_primary_paid,
             split_partner_paid=c.split_partner_paid,
             split_partner_paid_via=c.split_partner_paid_via,
@@ -186,6 +187,7 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
         allow_zelle=group.allow_zelle,
         cashapp_handle=group.cashapp_handle,
         zelle_handle=group.zelle_handle,
+        recipient_must_pay=group.recipient_must_pay,
         members=members,
         current_cycle_detail=current_cycle_detail,
         cycle_summaries=summaries,
@@ -232,6 +234,7 @@ async def create_susu_group(
         allow_zelle=body.allow_zelle,
         cashapp_handle=body.cashapp_handle,
         zelle_handle=body.zelle_handle,
+        recipient_must_pay=body.recipient_must_pay,
     )
     db.add(group)
     await db.commit()
@@ -608,10 +611,13 @@ async def start_susu(
     # Create contribution records for cycle 1 (each member contributes slots × base amount)
     cycle1 = cycle_records[0]
     for member in group.members:
+        is_exempt = (not group.recipient_must_pay) and (member.id == cycle1.recipient_member_id)
         db.add(SusuContribution(
             cycle_id=cycle1.id,
             member_id=member.id,
             amount=member.slots * group.contribution_amount,
+            paid=is_exempt,
+            is_exempt=is_exempt,
         ))
 
     group.status = SusuStatus.active
@@ -934,10 +940,13 @@ async def advance_cycle(
     )
     if not existing_contribs.scalars().first():
         for member in group.members:
+            is_exempt = (not group.recipient_must_pay) and (member.id == next_cycle.recipient_member_id)
             db.add(SusuContribution(
                 cycle_id=next_cycle.id,
                 member_id=member.id,
-                amount=member.slots * group.contribution_amount,  # Feature 1: slots
+                amount=member.slots * group.contribution_amount,
+                paid=is_exempt,
+                is_exempt=is_exempt,
             ))
 
     group.current_cycle = next_cycle_number
@@ -1925,11 +1934,13 @@ async def public_susu_standings(
         # Split: check current cycle payment status for each partner
         current_primary_paid = False
         current_partner_paid = False
+        current_is_exempt = False
         if current_cycle_obj:
             contrib = next((c for c in current_cycle_obj.contributions if c.member_id == m.id), None)
             if contrib:
                 current_primary_paid = contrib.split_primary_paid if m.is_split else contrib.paid
                 current_partner_paid = contrib.split_partner_paid if m.is_split else False
+                current_is_exempt = contrib.is_exempt
 
         standings.append(SusuMemberStanding(
             id=m.id,
@@ -1943,6 +1954,7 @@ async def public_susu_standings(
             split_partner_name=m.split_partner_name,
             current_cycle_primary_paid=current_primary_paid,
             current_cycle_partner_paid=current_partner_paid,
+            current_cycle_is_exempt=current_is_exempt,
         ))
 
     standings.sort(key=lambda s: s.total_contributed, reverse=True)

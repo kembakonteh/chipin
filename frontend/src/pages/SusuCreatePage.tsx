@@ -57,6 +57,7 @@ export default function SusuCreatePage() {
   const [allowZelle, setAllowZelle] = useState(false)
   const [cashappHandle, setCashappHandle] = useState('')
   const [zelleHandle, setZelleHandle] = useState('')
+  const [recipientMustPay, setRecipientMustPay] = useState(true)
 
   // Members — collected on step 1 alongside group details
   const [members, setMembers] = useState<MemberRow[]>([emptyMember(), emptyMember()])
@@ -85,6 +86,7 @@ export default function SusuCreatePage() {
         allow_zelle: allowZelle,
         cashapp_handle: cashappHandle.trim() || null,
         zelle_handle: zelleHandle.trim() || null,
+        recipient_must_pay: recipientMustPay,
       }).then(getData)
       setGroup(g)
 
@@ -326,6 +328,22 @@ export default function SusuCreatePage() {
                     className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
                   />
                 )}
+              </div>
+
+              {/* Recipient exemption setting */}
+              <div className="pt-1 border-t border-gray-800">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={recipientMustPay}
+                    onChange={e => setRecipientMustPay(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 accent-brand-500"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-200">🎁 Recipient pays their cycle contribution</span>
+                    <p className="text-xs text-gray-500 mt-0.5">When off, the cycle recipient is exempt from contributing that cycle</p>
+                  </div>
+                </label>
               </div>
 
               {/* Feature 8: Group Rules */}

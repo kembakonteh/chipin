@@ -40,6 +40,7 @@ export interface SusuContribution {
   paid_at: string | null
   missed: boolean  // Feature 4: missed payment flag
   pending_verification: boolean
+  is_exempt: boolean
   split_primary_paid: boolean
   split_partner_paid: boolean
   split_partner_paid_via: SusuPaidVia | null
@@ -93,6 +94,7 @@ export interface SusuGroup {
   allow_zelle: boolean
   cashapp_handle: string | null
   zelle_handle: string | null
+  recipient_must_pay: boolean
 }
 
 export interface SusuPayPageInfo {
@@ -146,6 +148,7 @@ export interface SusuMemberStanding {
   split_partner_name: string | null
   current_cycle_primary_paid: boolean
   current_cycle_partner_paid: boolean
+  current_cycle_is_exempt: boolean
 }
 
 export interface SusuStandingsData {

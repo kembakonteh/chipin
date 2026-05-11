@@ -106,15 +106,18 @@ function ContributionRow({
 
   const isPending = contribution.pending_verification
   const isPartnerPending = contribution.split_partner_pending_verification
+  const isExempt = contribution.is_exempt
 
   const anyPending = isPending || isPartnerPending
-  const rowClass = anyPending
-    ? 'bg-amber-950 border border-amber-800'
-    : contribution.missed
-      ? 'bg-red-950 border border-red-800'
-      : contribution.paid
-        ? 'bg-emerald-950 border border-emerald-800'
-        : 'bg-gray-800 border border-gray-700'
+  const rowClass = isExempt
+    ? 'bg-amber-950/30 border border-amber-800/30'
+    : anyPending
+      ? 'bg-amber-950 border border-amber-800'
+      : contribution.missed
+        ? 'bg-red-950 border border-red-800'
+        : contribution.paid
+          ? 'bg-emerald-950 border border-emerald-800'
+          : 'bg-gray-800 border border-gray-700'
 
   const splitHalf = splitAmount ? fmt(parseFloat(splitAmount)) : null
 
@@ -122,13 +125,16 @@ function ContributionRow({
     <div className={`rounded-lg text-sm ${rowClass}`}>
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span className={`text-base ${contribution.paid ? 'text-emerald-400' : anyPending ? 'text-amber-400' : contribution.missed ? 'text-red-400' : 'text-gray-600'}`}>
-            {isSplit ? '✂️' : contribution.paid ? '✓' : isPending ? '⏳' : contribution.missed ? '✗' : '○'}
+          <span className={`text-base ${isExempt ? 'text-amber-400' : contribution.paid ? 'text-emerald-400' : anyPending ? 'text-amber-400' : contribution.missed ? 'text-red-400' : 'text-gray-600'}`}>
+            {isExempt ? '🎁' : isSplit ? '✂️' : contribution.paid ? '✓' : isPending ? '⏳' : contribution.missed ? '✗' : '○'}
           </span>
           <div>
-            <span className={contribution.paid ? 'text-white' : anyPending ? 'text-amber-200' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
+            <span className={isExempt ? 'text-amber-200' : contribution.paid ? 'text-white' : anyPending ? 'text-amber-200' : contribution.missed ? 'text-red-300' : 'text-gray-400'}>
               {isSplit && splitPartnerName ? `${contribution.member_name} & ${splitPartnerName}` : contribution.member_name}
             </span>
+            {isExempt && (
+              <span className="ml-2 text-xs text-amber-400/80">Exempt (cycle recipient)</span>
+            )}
             {isSplit && (
               <div className="flex gap-3 mt-0.5">
                 <span className={`text-xs ${contribution.split_primary_paid ? 'text-emerald-400' : isPending ? 'text-amber-400' : 'text-gray-500'}`}>
@@ -161,7 +167,7 @@ function ContributionRow({
           }>
             {fmt(parseFloat(contribution.amount))}
           </span>
-          {!contribution.paid && !contribution.missed && !anyPending && isCurrentCycle && (
+          {!contribution.paid && !contribution.missed && !anyPending && !isExempt && isCurrentCycle && (
             <div className="flex items-center gap-1">
               <select
                 value={payVia}
@@ -522,7 +528,7 @@ export default function SusuDetail() {
   const [rulesText, setRulesText] = useState('')
   // Payment settings
   const [editingPaymentSettings, setEditingPaymentSettings] = useState(false)
-  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '' })
+  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true })
 
   const addMember = useMutation({
     mutationFn: () =>
@@ -595,8 +601,17 @@ export default function SusuDetail() {
       allow_zelle: paySettings.allow_zelle,
       cashapp_handle: paySettings.cashapp_handle.trim() || null,
       zelle_handle: paySettings.zelle_handle.trim() || null,
+      recipient_must_pay: paySettings.recipient_must_pay,
     }).then(getData),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Auto-append a rule note when the recipient exemption setting changes
+      if (group && paySettings.recipient_must_pay !== group.recipient_must_pay) {
+        const ruleNote = paySettings.recipient_must_pay
+          ? 'All members including the cycle recipient must contribute each cycle.'
+          : 'Cycle recipient is exempt from contributing that cycle.'
+        const newRules = group.rules ? `${group.rules}\n\n${ruleNote}` : ruleNote
+        try { await api.patch(`/susu/${slug}`, { rules: newRules }) } catch { /* non-critical */ }
+      }
       qc.invalidateQueries({ queryKey: ['susu', slug] })
       setEditingPaymentSettings(false)
       toast.success('Payment settings saved')
@@ -1218,6 +1233,7 @@ export default function SusuDetail() {
                       allow_zelle: group.allow_zelle,
                       cashapp_handle: group.cashapp_handle ?? '',
                       zelle_handle: group.zelle_handle ?? '',
+                      recipient_must_pay: group.recipient_must_pay,
                     })
                     setEditingPaymentSettings(true)
                   }}
@@ -1246,6 +1262,20 @@ export default function SusuDetail() {
                       <span className="text-sm text-gray-200">{m.icon} {m.label}</span>
                     </label>
                   ))}
+                </div>
+                <div className="pt-1 border-t border-gray-800">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={paySettings.recipient_must_pay}
+                      onChange={e => setPaySettings(s => ({ ...s, recipient_must_pay: e.target.checked }))}
+                      className="w-4 h-4 mt-0.5 accent-brand-500"
+                    />
+                    <div>
+                      <span className="text-sm text-gray-200">🎁 Recipient pays their cycle contribution</span>
+                      <p className="text-xs text-gray-500 mt-0.5">When off, the cycle recipient is exempt from contributing that cycle</p>
+                    </div>
+                  </label>
                 </div>
                 {paySettings.allow_cashapp && (
                   <div>
@@ -1288,20 +1318,28 @@ export default function SusuDetail() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {group.allow_card && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-blue-900/40 text-blue-300 border border-blue-800/40">💳 Card</span>
-                )}
-                {group.allow_cashapp && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-800/40">
-                    💚 CashApp{group.cashapp_handle ? ` · ${group.cashapp_handle}` : ''}
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {group.allow_card && (
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-blue-900/40 text-blue-300 border border-blue-800/40">💳 Card</span>
+                  )}
+                  {group.allow_cashapp && (
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-800/40">
+                      💚 CashApp{group.cashapp_handle ? ` · ${group.cashapp_handle}` : ''}
+                    </span>
+                  )}
+                  {group.allow_zelle && (
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-800/40">
+                      🔵 Zelle{group.zelle_handle ? ` · ${group.zelle_handle}` : ''}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  🎁 Recipient contribution:{' '}
+                  <span className={group.recipient_must_pay ? 'text-gray-300' : 'text-amber-400'}>
+                    {group.recipient_must_pay ? 'Required' : 'Exempt'}
                   </span>
-                )}
-                {group.allow_zelle && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-800/40">
-                    🔵 Zelle{group.zelle_handle ? ` · ${group.zelle_handle}` : ''}
-                  </span>
-                )}
+                </p>
               </div>
             )}
           </div>

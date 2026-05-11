@@ -129,7 +129,9 @@ export default function SusuStandings() {
                     {m.payout_position != null && (
                       <div className="text-xs text-gray-600">#{m.payout_position}</div>
                     )}
-                    {data.status === 'active' && m.is_split ? (
+                    {data.status === 'active' && m.current_cycle_is_exempt ? (
+                      <span className="text-xs text-amber-400">🎁 Exempt (recipient)</span>
+                    ) : data.status === 'active' && m.is_split ? (
                       <div className="flex flex-col gap-1 items-end">
                         {!m.current_cycle_primary_paid && (
                           <Link
