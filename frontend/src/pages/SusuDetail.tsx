@@ -645,8 +645,13 @@ export default function SusuDetail() {
     if (!group) return
     const cycle = group.current_cycle_detail
     const paidIds = new Set(cycle?.contributions.filter(c => c.paid).map(c => c.member_id) ?? [])
+    const recipientId = cycle?.recipient_member_id
     const sorted = [...group.members].sort((a, b) => (a.payout_position ?? 999) - (b.payout_position ?? 999))
-    const lines = sorted.map(m => paidIds.has(m.id) ? `✅ ${m.name} — Paid` : `⏳ ${m.name} — Pending`)
+    const lines = sorted.map(m =>
+      m.id === recipientId
+        ? `🎁 ${m.name} — Recipient`
+        : paidIds.has(m.id) ? `✅ ${m.name} — Paid` : `⏳ ${m.name} — Pending`
+    )
     const nextRecipient = cycle?.recipient_name ?? '—'
     const payoutsCompleted = group.cycle_summaries.filter(c => c.status === 'paid_out').length
     const text = [
