@@ -1,4 +1,4 @@
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
@@ -98,8 +98,7 @@ function PayModal({
 export default function PublicSusu() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const justPaid = searchParams.get('paid') === '1'
+const justPaid = searchParams.get('paid') === '1'
   const [payingMember, setPayingMember] = useState<SusuMember | null>(null)
 
   const { data: group, isLoading } = useQuery<SusuDetail>({
