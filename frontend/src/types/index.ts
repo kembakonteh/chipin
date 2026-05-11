@@ -96,6 +96,7 @@ export interface SusuGroup {
   zelle_handle: string | null
   recipient_must_pay: boolean
   accepting_members: boolean
+  pending_join_requests: number
 }
 
 export interface SusuPayPageInfo {
@@ -154,6 +155,7 @@ export interface SusuMemberStanding {
 
 export interface SusuJoinPageInfo {
   accepting: boolean
+  has_started?: boolean
   name?: string | null
   contribution_amount?: string | null
   frequency?: SusuFrequency | null

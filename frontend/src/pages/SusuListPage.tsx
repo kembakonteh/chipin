@@ -50,6 +50,11 @@ function SusuCard({ group }: { group: SusuGroup }) {
             ↺ {FREQ_LABELS[group.frequency]} · {fmt(parseFloat(group.contribution_amount))}/member
             · {group.total_members} members
           </p>
+          {group.status === 'forming' && group.pending_join_requests > 0 && (
+            <p className="text-xs text-yellow-400 mt-1">
+              🔔 {group.pending_join_requests} pending request{group.pending_join_requests !== 1 ? 's' : ''}
+            </p>
+          )}
         </div>
         <span className={`text-xs px-2 py-1 rounded-full capitalize ${STATUS_STYLES[group.status]}`}>
           {group.status}

@@ -797,75 +797,71 @@ export default function SusuDetail() {
         )}
 
         {/* Join requests — forming groups only */}
-        {group.status === 'forming' && (
-          <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-white">Join Requests</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {joinRequests?.filter(r => r.status === 'pending').length ?? 0} pending
-                </p>
+        {group.status === 'forming' && (() => {
+          const pendingRequests = joinRequests?.filter(r => r.status === 'pending') ?? []
+          return (
+            <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-white">Join Requests</h2>
+                  {pendingRequests.length > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/40 text-yellow-300 border border-yellow-800/40">
+                      {pendingRequests.length} pending
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    const link = `${window.location.origin}/s/${slug}/join`
+                    navigator.clipboard.writeText(link)
+                      .then(() => toast.success('Join link copied!'))
+                      .catch(() => toast.error('Could not copy link'))
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-sky-900/30 text-sky-300 hover:bg-sky-900/50 border border-sky-800/40 transition-colors"
+                >
+                  📋 Copy Join Link
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  const link = `${window.location.origin}/s/${slug}/join`
-                  navigator.clipboard.writeText(link)
-                    .then(() => toast.success('Join link copied!'))
-                    .catch(() => toast.error('Could not copy link'))
-                }}
-                className="text-xs px-3 py-1.5 rounded-lg bg-sky-900/30 text-sky-300 hover:bg-sky-900/50 border border-sky-800/40 transition-colors"
-              >
-                📋 Copy Join Link
-              </button>
-            </div>
-            {!joinRequests || joinRequests.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-gray-500">
-                No join requests yet. Share your join link to invite people.
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-800">
-                {joinRequests.map(r => (
-                  <div key={r.id} className="flex items-center justify-between px-5 py-3">
-                    <div className="flex-1 min-w-0 mr-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-white font-medium truncate">{r.name}</span>
-                        <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${
-                          r.status === 'pending'  ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-800/40'
-                          : r.status === 'approved' ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-800/40'
-                          : 'bg-gray-800 text-gray-500 border border-gray-700'
-                        }`}>
-                          {r.status}
-                        </span>
+              {pendingRequests.length === 0 ? (
+                <div className="px-5 py-8 text-center text-sm text-gray-500">
+                  No pending join requests. Share your join link to invite people.
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-800">
+                  {pendingRequests.map(r => (
+                    <div key={r.id} className="px-5 py-3.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white font-medium">{r.name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{r.phone}</div>
+                          {r.message && (
+                            <div className="text-xs text-gray-400 mt-1.5 italic">"{r.message}"</div>
+                          )}
+                        </div>
+                        <div className="flex gap-2 shrink-0 mt-0.5">
+                          <button
+                            onClick={() => approveJoinRequest.mutate(r.id)}
+                            disabled={approveJoinRequest.isPending || rejectJoinRequest.isPending}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-brand-700/40 text-brand-300 hover:bg-brand-700/70 border border-brand-700/50 transition-colors disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => rejectJoinRequest.mutate(r.id)}
+                            disabled={approveJoinRequest.isPending || rejectJoinRequest.isPending}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-800/40 transition-colors disabled:opacity-50"
+                          >
+                            Decline
+                          </button>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">{r.phone}</div>
-                      {r.message && (
-                        <div className="text-xs text-gray-400 mt-0.5 italic truncate">"{r.message}"</div>
-                      )}
                     </div>
-                    {r.status === 'pending' && (
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          onClick={() => approveJoinRequest.mutate(r.id)}
-                          disabled={approveJoinRequest.isPending}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-brand-700/40 text-brand-300 hover:bg-brand-700/70 border border-brand-700/50 transition-colors disabled:opacity-50"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => rejectJoinRequest.mutate(r.id)}
-                          disabled={rejectJoinRequest.isPending}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-800/40 transition-colors disabled:opacity-50"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Tabs */}
         {group.status === 'active' && (

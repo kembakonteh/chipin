@@ -179,6 +179,8 @@ class SusuGroupResponse(BaseModel):
     recipient_must_pay: bool = True
     # Join request gate
     accepting_members: bool = True
+    # Pending join requests count (populated by list endpoint)
+    pending_join_requests: int = 0
 
 
 class SusuDetailResponse(SusuGroupResponse):
@@ -266,6 +268,7 @@ class SusuPaymentSettingsUpdate(BaseModel):
 
 class SusuJoinPageInfo(BaseModel):
     accepting: bool
+    has_started: bool = False
     name: Optional[str] = None
     contribution_amount: Optional[Decimal] = None
     frequency: Optional[SusuFrequency] = None

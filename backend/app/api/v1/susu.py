@@ -12,7 +12,7 @@ from typing import List, Optional
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -259,7 +259,26 @@ async def list_susu_groups(
         .where(SusuGroup.owner_id == current_user.id)
         .order_by(SusuGroup.created_at.desc())
     )
-    return result.scalars().all()
+    groups = list(result.scalars().all())
+
+    forming_ids = [g.id for g in groups if g.status == SusuStatus.forming]
+    pending_counts: dict = {}
+    if forming_ids:
+        counts_result = await db.execute(
+            select(SusuJoinRequest.group_id, func.count(SusuJoinRequest.id))
+            .where(
+                SusuJoinRequest.group_id.in_(forming_ids),
+                SusuJoinRequest.status == SusuJoinRequestStatus.pending,
+            )
+            .group_by(SusuJoinRequest.group_id)
+        )
+        for gid, cnt in counts_result:
+            pending_counts[gid] = cnt
+
+    return [
+        SusuGroupResponse.model_validate(g).model_copy(update={"pending_join_requests": pending_counts.get(g.id, 0)})
+        for g in groups
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1149,6 +1168,16 @@ async def approve_join_request(
     join_req.status = SusuJoinRequestStatus.approved
     await db.commit()
     await db.refresh(join_req)
+
+    try:
+        from app.workers.tasks import _send_whatsapp_text
+        await _send_whatsapp_text(
+            join_req.phone,
+            f"Your request to join '{group.name}' has been approved! The organiser will be in touch with next steps.",
+        )
+    except Exception as exc:
+        logger.warning("Failed to send join approval WhatsApp to %s: %s", join_req.phone, exc)
+
     return join_req
 
 
@@ -1180,6 +1209,16 @@ async def reject_join_request(
     join_req.status = SusuJoinRequestStatus.rejected
     await db.commit()
     await db.refresh(join_req)
+
+    try:
+        from app.workers.tasks import _send_whatsapp_text
+        await _send_whatsapp_text(
+            join_req.phone,
+            f"Your request to join '{group.name}' was not accepted at this time.",
+        )
+    except Exception as exc:
+        logger.warning("Failed to send join rejection WhatsApp to %s: %s", join_req.phone, exc)
+
     return join_req
 
 
@@ -1996,10 +2035,14 @@ async def get_susu_join_info(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
 
     if group.status != SusuStatus.forming or not group.accepting_members:
-        return SusuJoinPageInfo(accepting=False)
+        return SusuJoinPageInfo(
+            accepting=False,
+            has_started=group.status != SusuStatus.forming,
+        )
 
     return SusuJoinPageInfo(
         accepting=True,
+        has_started=False,
         name=group.name,
         contribution_amount=group.contribution_amount,
         frequency=group.frequency,
@@ -2022,7 +2065,7 @@ async def submit_join_request(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
-    if group.status != SusuStatus.forming:
+    if group.status != SusuStatus.forming or not group.accepting_members:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This group is no longer accepting join requests")
 
     existing = await db.execute(

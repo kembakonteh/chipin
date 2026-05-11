@@ -97,7 +97,9 @@ export default function SusuJoin() {
           <p className="text-sm text-gray-400">
             {!info
               ? 'This Susu group could not be found.'
-              : 'This susu is no longer accepting new members.'}
+              : info.has_started
+                ? 'This susu has already started and is no longer accepting new members.'
+                : 'This susu is no longer accepting new members.'}
           </p>
           {info && (
             <Link
