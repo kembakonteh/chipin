@@ -36,6 +36,7 @@ function ContributionRow({
   contribution,
   cycleNumber,
   groupSlug,
+  groupName,
   isCurrentCycle,
   isSplit,
   splitPartnerName,
@@ -44,6 +45,7 @@ function ContributionRow({
   contribution: SusuContribution
   cycleNumber: number
   groupSlug: string
+  groupName: string
   isCurrentCycle: boolean
   isSplit?: boolean
   splitPartnerName?: string | null
@@ -193,6 +195,18 @@ function ContributionRow({
                 title="Mark as missed"
               >
                 {markMissed.isPending ? '…' : '✗'}
+              </button>
+              <button
+                onClick={() => {
+                  const firstName = contribution.member_name.split(' ')[0]
+                  const payUrl = `${window.location.origin}/s/${groupSlug}/pay/${contribution.member_id}`
+                  const msg = `Hi ${firstName}! Here is your payment link for ${groupName} Cycle ${cycleNumber}: ${payUrl}`
+                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+                }}
+                className="text-xs px-2 py-1 rounded bg-emerald-900 text-emerald-300 hover:bg-emerald-800 transition-colors"
+                title="Send pay link via WhatsApp"
+              >
+                📲
               </button>
             </div>
           )}
@@ -644,7 +658,7 @@ export default function SusuDetail() {
       `🎁 Payouts completed: ${payoutsCompleted} of ${group.total_cycles}`,
       `🔜 Next payout: ${nextRecipient}`,
       '',
-      `View standings & pay: https://chipin.kafotech.io/s/${slug}/standings`,
+      `View standings: ${window.location.origin}/s/${slug}/standings`,
     ].join('\n')
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
   }
@@ -932,6 +946,7 @@ export default function SusuDetail() {
                     contribution={c}
                     cycleNumber={cycle.cycle_number}
                     groupSlug={slug!}
+                    groupName={group.name}
                     isCurrentCycle={true}
                     isSplit={mem?.is_split}
                     splitPartnerName={mem?.split_partner_name}

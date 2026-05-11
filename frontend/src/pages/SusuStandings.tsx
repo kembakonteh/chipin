@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
@@ -63,12 +63,6 @@ export default function SusuStandings() {
               <span className="block text-sm font-bold text-white">ChipIn · Susu</span>
             </div>
           </div>
-          <Link
-            to={`/s/${slug}`}
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            ← Group page
-          </Link>
         </div>
       </header>
 
@@ -153,15 +147,6 @@ export default function SusuStandings() {
               ))}
             </div>
           )}
-        </div>
-
-        <div className="flex justify-center gap-4">
-          <Link
-            to={`/s/${slug}`}
-            className="text-sm px-4 py-2 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
-          >
-            View group
-          </Link>
         </div>
 
         <p className="text-center text-xs text-gray-600 pb-4">
