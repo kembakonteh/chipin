@@ -96,6 +96,7 @@ export interface SusuGroup {
   zelle_handle: string | null
   recipient_must_pay: boolean
   accepting_members: boolean
+  payment_window_days: number
   pending_join_requests: number
 }
 
@@ -120,6 +121,7 @@ export interface SusuPayPageInfo {
 }
 
 export interface SusuDetail extends SusuGroup {
+  organizer_first_name?: string | null
   members: SusuMember[]
   current_cycle_detail: SusuCycleDetail | null
   cycle_summaries: SusuCycleSummary[]
@@ -162,6 +164,7 @@ export interface SusuJoinPageInfo {
   total_members?: number | null
   organizer_name?: string | null
   rules?: string | null
+  payment_window_days?: number
 }
 
 export interface SusuStandingsData {

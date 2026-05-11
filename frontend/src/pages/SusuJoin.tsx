@@ -14,6 +14,12 @@ const FREQ_LABELS: Record<SusuFrequency, string> = {
   monthly: 'Monthly',
 }
 
+function paymentWindowLabel(frequency: SusuFrequency, days: number): string {
+  if (frequency === 'monthly') return `Last ${days} days of each month`
+  if (frequency === 'biweekly') return `Last ${days} days of each 2-week period`
+  return `Last ${days} days of each week`
+}
+
 type PageState = 'form' | 'success'
 
 interface JoinForm {
@@ -122,22 +128,58 @@ export default function SusuJoin() {
         <div className="text-center">
           <div className="text-4xl mb-3">🤝</div>
           <h1 className="text-xl font-bold text-white">{info.name}</h1>
-          {info.frequency && info.contribution_amount && (
-            <p className="text-sm text-gray-400 mt-1">
-              {FREQ_LABELS[info.frequency]} · {fmt(parseFloat(String(info.contribution_amount)))}/member
-            </p>
-          )}
-          {info.total_members != null && (
-            <p className="text-xs text-gray-600 mt-1">
-              {info.total_members} member{info.total_members !== 1 ? 's' : ''} so far
-            </p>
-          )}
           {info.organizer_name && (
             <p className="text-xs text-gray-500 mt-1">
-              Organised by <span className="text-gray-300">{info.organizer_name}</span>
+              Organised by <span className="text-gray-300">{info.organizer_name.split(' ')[0]}</span>
             </p>
           )}
         </div>
+
+        {/* Details card */}
+        {(info.contribution_amount || info.frequency || info.total_members != null) && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 divide-y divide-gray-800">
+            {info.contribution_amount && (
+              <div className="flex items-center gap-3 px-5 py-3.5">
+                <span className="text-base">💰</span>
+                <div className="flex-1 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Contribution</span>
+                  <span className="text-sm text-white font-medium">
+                    {fmt(parseFloat(String(info.contribution_amount)))} per member
+                  </span>
+                </div>
+              </div>
+            )}
+            {info.frequency && (
+              <div className="flex items-center gap-3 px-5 py-3.5">
+                <span className="text-base">📅</span>
+                <div className="flex-1 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Frequency</span>
+                  <span className="text-sm text-white font-medium">{FREQ_LABELS[info.frequency]}</span>
+                </div>
+              </div>
+            )}
+            {info.total_members != null && (
+              <div className="flex items-center gap-3 px-5 py-3.5">
+                <span className="text-base">👥</span>
+                <div className="flex-1 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Members so far</span>
+                  <span className="text-sm text-white font-medium">{info.total_members}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Payment window */}
+        {info.frequency && info.payment_window_days && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 px-5 py-4 flex items-start gap-3">
+            <span className="text-base mt-0.5">⏰</span>
+            <div>
+              <p className="text-sm font-medium text-white mb-0.5">Payment window</p>
+              <p className="text-xs text-gray-400">{paymentWindowLabel(info.frequency, info.payment_window_days)}</p>
+            </div>
+          </div>
+        )}
 
         {info.rules && (
           <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">

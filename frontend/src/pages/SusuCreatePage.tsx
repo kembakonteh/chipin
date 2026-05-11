@@ -51,6 +51,8 @@ export default function SusuCreatePage() {
   const [lateFee, setLateFee] = useState('')
   // Feature 8: group rules
   const [rules, setRules] = useState('')
+  // Payment window
+  const [paymentWindowDays, setPaymentWindowDays] = useState('5')
   // Payment method settings
   const [allowCard, setAllowCard] = useState(true)
   const [allowCashapp, setAllowCashapp] = useState(false)
@@ -81,6 +83,7 @@ export default function SusuCreatePage() {
         missed_policy: missedPolicy,
         late_fee_pct: lateFee ? parseFloat(lateFee) : null,
         rules: rules.trim() || null,
+        payment_window_days: parseInt(paymentWindowDays) || 5,
         allow_card: allowCard,
         allow_cashapp: allowCashapp,
         allow_zelle: allowZelle,
@@ -239,14 +242,28 @@ export default function SusuCreatePage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Start Date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">Payment window (days)</label>
+                  <input
+                    type="number"
+                    value={paymentWindowDays}
+                    onChange={e => setPaymentWindowDays(e.target.value)}
+                    min={1}
+                    max={14}
+                    className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-600">Days members have to pay each cycle (1–14)</p>
+                </div>
               </div>
 
               {/* Feature 4: Missed payment policy */}

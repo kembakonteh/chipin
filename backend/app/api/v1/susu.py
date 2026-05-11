@@ -82,6 +82,7 @@ async def _get_group_or_404(slug: str, db: AsyncSession) -> SusuGroup:
     result = await db.execute(
         select(SusuGroup)
         .options(
+            selectinload(SusuGroup.owner),
             selectinload(SusuGroup.members),
             selectinload(SusuGroup.cycles).selectinload(SusuCycle.contributions).selectinload(SusuContribution.member),
         )
@@ -163,6 +164,8 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
             status=cycle.status,
         ))
 
+    organizer_first_name = group.owner.name.split()[0] if group.owner and group.owner.name else None
+
     return SusuDetailResponse(
         id=group.id,
         org_id=group.org_id,
@@ -190,6 +193,8 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
         zelle_handle=group.zelle_handle,
         recipient_must_pay=group.recipient_must_pay,
         accepting_members=group.accepting_members,
+        payment_window_days=group.payment_window_days,
+        organizer_first_name=organizer_first_name,
         members=members,
         current_cycle_detail=current_cycle_detail,
         cycle_summaries=summaries,
@@ -238,6 +243,7 @@ async def create_susu_group(
         zelle_handle=body.zelle_handle,
         recipient_must_pay=body.recipient_must_pay,
         accepting_members=body.accepting_members,
+        payment_window_days=body.payment_window_days,
     )
     db.add(group)
     await db.commit()
@@ -2049,6 +2055,7 @@ async def get_susu_join_info(
         total_members=group.total_members,
         organizer_name=group.owner.name if group.owner else "the organiser",
         rules=group.rules,
+        payment_window_days=group.payment_window_days,
     )
 
 

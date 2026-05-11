@@ -528,7 +528,7 @@ export default function SusuDetail() {
   const [rulesText, setRulesText] = useState('')
   // Payment settings
   const [editingPaymentSettings, setEditingPaymentSettings] = useState(false)
-  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true, accepting_members: true })
+  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true, accepting_members: true, payment_window_days: 5 })
 
   const addMember = useMutation({
     mutationFn: () =>
@@ -603,6 +603,7 @@ export default function SusuDetail() {
       zelle_handle: paySettings.zelle_handle.trim() || null,
       recipient_must_pay: paySettings.recipient_must_pay,
       accepting_members: paySettings.accepting_members,
+      payment_window_days: paySettings.payment_window_days,
     }).then(getData),
     onSuccess: async () => {
       // Auto-append a rule note when the recipient exemption setting changes
@@ -1232,6 +1233,7 @@ export default function SusuDetail() {
                       zelle_handle: group.zelle_handle ?? '',
                       recipient_must_pay: group.recipient_must_pay,
                       accepting_members: group.accepting_members,
+                      payment_window_days: group.payment_window_days ?? 5,
                     })
                     setEditingPaymentSettings(true)
                   }}
@@ -1288,6 +1290,18 @@ export default function SusuDetail() {
                       <p className="text-xs text-gray-500 mt-0.5">When off, the cycle recipient is exempt from contributing that cycle</p>
                     </div>
                   </label>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Payment window (days)</label>
+                  <input
+                    type="number"
+                    value={paySettings.payment_window_days}
+                    onChange={e => setPaySettings(s => ({ ...s, payment_window_days: parseInt(e.target.value) || 5 }))}
+                    min={1}
+                    max={14}
+                    className="w-24 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-600">Days members have to pay each cycle (1–14)</p>
                 </div>
                 {paySettings.allow_cashapp && (
                   <div>
@@ -1351,6 +1365,10 @@ export default function SusuDetail() {
                   <span className={group.recipient_must_pay ? 'text-gray-300' : 'text-amber-400'}>
                     {group.recipient_must_pay ? 'Required' : 'Exempt'}
                   </span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  ⏰ Payment window:{' '}
+                  <span className="text-gray-300">{group.payment_window_days ?? 5} days</span>
                 </p>
                 {group.status === 'forming' && (
                   <p className="text-xs text-gray-500">

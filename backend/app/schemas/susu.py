@@ -32,6 +32,8 @@ class SusuGroupCreate(BaseModel):
     recipient_must_pay: bool = True
     # Join request gate
     accepting_members: bool = True
+    # Payment window
+    payment_window_days: int = Field(5, ge=1, le=14)
 
 
 class SusuGroupUpdate(BaseModel):
@@ -179,11 +181,14 @@ class SusuGroupResponse(BaseModel):
     recipient_must_pay: bool = True
     # Join request gate
     accepting_members: bool = True
+    # Payment window
+    payment_window_days: int = 5
     # Pending join requests count (populated by list endpoint)
     pending_join_requests: int = 0
 
 
 class SusuDetailResponse(SusuGroupResponse):
+    organizer_first_name: Optional[str] = None
     members: List[SusuMemberResponse] = []
     current_cycle_detail: Optional[SusuCycleResponse] = None
     cycle_summaries: List[SusuCycleSummary] = []
@@ -264,6 +269,7 @@ class SusuPaymentSettingsUpdate(BaseModel):
     zelle_handle: Optional[str] = Field(None, max_length=100)
     recipient_must_pay: Optional[bool] = None
     accepting_members: Optional[bool] = None
+    payment_window_days: Optional[int] = Field(None, ge=1, le=14)
 
 
 class SusuJoinPageInfo(BaseModel):
@@ -275,6 +281,7 @@ class SusuJoinPageInfo(BaseModel):
     total_members: Optional[int] = None
     organizer_name: Optional[str] = None
     rules: Optional[str] = None
+    payment_window_days: Optional[int] = None
 
 
 class SusuPayPageInfo(BaseModel):

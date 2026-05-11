@@ -20,6 +20,12 @@ function formatDate(iso: string) {
   })
 }
 
+function paymentWindowLabel(frequency: SusuFrequency, days: number): string {
+  if (frequency === 'monthly') return `Last ${days} days of each month`
+  if (frequency === 'biweekly') return `Last ${days} days of each 2-week period`
+  return `Last ${days} days of each week`
+}
+
 function PayModal({
   member,
   groupSlug,
@@ -98,7 +104,7 @@ function PayModal({
 export default function PublicSusu() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
-const justPaid = searchParams.get('paid') === '1'
+  const justPaid = searchParams.get('paid') === '1'
   const [payingMember, setPayingMember] = useState<SusuMember | null>(null)
 
   const { data: group, isLoading } = useQuery<SusuDetail>({
@@ -127,6 +133,7 @@ const justPaid = searchParams.get('paid') === '1'
   const potAmount = cycle ? parseFloat(cycle.pot_amount) : 0
   const collectedAmount = cycle ? parseFloat(cycle.collected_amount) : 0
   const pct = potAmount > 0 ? Math.min((collectedAmount / potAmount) * 100, 100) : 0
+  const payWindow = group.payment_window_days ?? 5
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -154,10 +161,65 @@ const justPaid = searchParams.get('paid') === '1'
         <div className="text-center">
           <div className="text-4xl mb-3">🤝</div>
           <h1 className="text-2xl font-bold text-white">{group.name}</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {FREQ_LABELS[group.frequency]} · {fmt(parseFloat(group.contribution_amount))}/member
-          </p>
+          {group.organizer_first_name && (
+            <p className="text-xs text-gray-500 mt-1">
+              Organised by <span className="text-gray-300">{group.organizer_first_name}</span>
+            </p>
+          )}
         </div>
+
+        {/* Details card */}
+        <div className="rounded-xl border border-gray-700 bg-gray-900 divide-y divide-gray-800">
+          <div className="flex items-center gap-3 px-5 py-3.5">
+            <span className="text-base">💰</span>
+            <div className="flex-1 flex items-center justify-between">
+              <span className="text-xs text-gray-400">Contribution</span>
+              <span className="text-sm text-white font-medium">
+                {fmt(parseFloat(group.contribution_amount))} per member
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-5 py-3.5">
+            <span className="text-base">📅</span>
+            <div className="flex-1 flex items-center justify-between">
+              <span className="text-xs text-gray-400">Frequency</span>
+              <span className="text-sm text-white font-medium">{FREQ_LABELS[group.frequency]}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-5 py-3.5">
+            <span className="text-base">👥</span>
+            <div className="flex-1 flex items-center justify-between">
+              <span className="text-xs text-gray-400">Members</span>
+              <span className="text-sm text-white font-medium">{group.total_members}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-5 py-3.5">
+            <span className="text-base">🔄</span>
+            <div className="flex-1 flex items-center justify-between">
+              <span className="text-xs text-gray-400">Cycles</span>
+              <span className="text-sm text-white font-medium">
+                {group.total_cycles > 0 ? `${group.current_cycle} of ${group.total_cycles}` : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment window */}
+        <div className="rounded-xl border border-gray-700 bg-gray-900 px-5 py-4 flex items-start gap-3">
+          <span className="text-base mt-0.5">⏰</span>
+          <div>
+            <p className="text-sm font-medium text-white mb-0.5">Payment window</p>
+            <p className="text-xs text-gray-400">{paymentWindowLabel(group.frequency, payWindow)}</p>
+          </div>
+        </div>
+
+        {/* Group rules */}
+        {group.rules && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 p-5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Group Rules</p>
+            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
+          </div>
+        )}
 
         {/* Current cycle progress */}
         {cycle && (
@@ -196,7 +258,6 @@ const justPaid = searchParams.get('paid') === '1'
                 const isPaid = contrib?.paid ?? false
                 const isRecipient = cycle.recipient_member_id === m.id
                 const isActive = group.status === 'active' && !isPaid
-                // Feature 1: use slots to compute per-member contribution
                 const memberAmount = parseFloat(contrib?.amount ?? '0') || (m.slots * parseFloat(group.contribution_amount))
 
                 return (
@@ -214,7 +275,6 @@ const justPaid = searchParams.get('paid') === '1'
                           <span className={`text-sm font-medium ${isPaid ? 'text-white' : 'text-gray-400'}`}>
                             {m.name}
                           </span>
-                          {/* Feature 1: slots badge */}
                           {m.slots > 1 && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-900/40 text-brand-300 border border-brand-800/40">
                               {m.slots} hands
@@ -280,19 +340,6 @@ const justPaid = searchParams.get('paid') === '1'
             </div>
           </div>
         )}
-
-        {/* Feature 8: Group Rules */}
-        {group.rules && (
-          <details className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
-            <summary className="px-5 py-3.5 font-semibold text-white text-sm cursor-pointer select-none">
-              Group Rules
-            </summary>
-            <div className="px-5 pb-4">
-              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
-            </div>
-          </details>
-        )}
-
 
         <p className="text-center text-xs text-gray-600 pb-4">
           Powered by KafoTech ChipIn

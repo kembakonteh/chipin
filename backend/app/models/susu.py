@@ -119,6 +119,8 @@ class SusuGroup(Base, UUIDMixin):
     recipient_must_pay: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     # Join request gate — auto-disabled when susu starts
     accepting_members: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    # Payment window in days (how long members have to pay each cycle)
+    payment_window_days: Mapped[int] = mapped_column(Integer, nullable=False, default=5, server_default="5")
 
     owner: Mapped["User"] = relationship("User")
     org: Mapped[Optional["Org"]] = relationship("Org")
