@@ -517,19 +517,25 @@ export default function SusuDetail() {
     onError: () => toast.error('Failed to delete group'),
   })
 
-  const shareStandings = useMutation({
-    mutationFn: () => api.post(`/susu/${slug}/share-standings`),
-    onSuccess: () => toast.success('Standings sent to your WhatsApp'),
-    onError: (err: any) => {
-      const detail: string = err?.response?.data?.detail ?? 'Failed to send standings'
-      if (detail.toLowerCase().includes('phone')) {
-        toast.error('Add your phone number in Profile to receive standings via WhatsApp', { duration: 5000 })
-        setTimeout(() => navigate('/profile'), 2500)
-      } else {
-        toast.error(detail)
-      }
-    },
-  })
+  function handleShareStandings() {
+    if (!group) return
+    const cycle = group.current_cycle_detail
+    const paidIds = new Set(cycle?.contributions.filter(c => c.paid).map(c => c.member_id) ?? [])
+    const sorted = [...group.members].sort((a, b) => (a.payout_position ?? 999) - (b.payout_position ?? 999))
+    const lines = sorted.map(m => paidIds.has(m.id) ? `✅ ${m.name} — Paid` : `⏳ ${m.name} — Pending`)
+    const nextRecipient = cycle?.recipient_name ?? '—'
+    const text = [
+      `📊 *${group.name} — Standings*`,
+      `Cycle ${group.current_cycle} of ${group.total_cycles}`,
+      '',
+      ...lines,
+      '',
+      `🎁 Next payout: ${nextRecipient}`,
+      '',
+      `View standings & pay: https://chipin.kafotech.io/s/${slug}/standings`,
+    ].join('\n')
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
 
   const { data: joinRequests, refetch: refetchJoinRequests } = useQuery<SusuJoinRequest[]>({
     queryKey: ['susu-join-requests', slug],
@@ -641,11 +647,10 @@ export default function SusuDetail() {
                 📊 Public Standings
               </a>
               <button
-                onClick={() => shareStandings.mutate()}
-                disabled={shareStandings.isPending}
-                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-600 transition-colors disabled:opacity-50"
+                onClick={handleShareStandings}
+                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-600 transition-colors"
               >
-                {shareStandings.isPending ? 'Sending…' : '📱 Share Standings'}
+                📱 Share Standings
               </button>
             </>
           )}
