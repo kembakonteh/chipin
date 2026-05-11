@@ -2048,6 +2048,7 @@ async def get_susu_join_info(
         frequency=group.frequency,
         total_members=group.total_members,
         organizer_name=group.owner.name if group.owner else "the organiser",
+        rules=group.rules,
     )
 
 

@@ -161,6 +161,7 @@ export interface SusuJoinPageInfo {
   frequency?: SusuFrequency | null
   total_members?: number | null
   organizer_name?: string | null
+  rules?: string | null
 }
 
 export interface SusuStandingsData {

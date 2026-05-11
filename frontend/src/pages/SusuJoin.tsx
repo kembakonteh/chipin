@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
@@ -23,6 +23,18 @@ interface JoinForm {
 }
 
 const EMPTY: JoinForm = { name: '', phone: '', message: '' }
+
+const headerEl = (
+  <header className="border-b border-gray-800 bg-gray-950/90 backdrop-blur sticky top-0 z-20">
+    <div className="mx-auto flex max-w-sm items-center px-4 py-3">
+      <span className="text-xl mr-2.5">🌍</span>
+      <div className="leading-none">
+        <span className="block text-xs text-brand-400 font-medium">KafoTech</span>
+        <span className="block text-sm font-bold text-white">ChipIn · Susu</span>
+      </div>
+    </div>
+  </header>
+)
 
 export default function SusuJoin() {
   const { slug } = useParams<{ slug: string }>()
@@ -54,26 +66,6 @@ export default function SusuJoin() {
     submit.mutate()
   }
 
-  const headerEl = (
-    <header className="border-b border-gray-800 bg-gray-950/90 backdrop-blur sticky top-0 z-20">
-      <div className="mx-auto flex max-w-sm items-center justify-between gap-2.5 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <span className="text-xl">🌍</span>
-          <div className="leading-none">
-            <span className="block text-xs text-brand-400 font-medium">KafoTech</span>
-            <span className="block text-sm font-bold text-white">ChipIn · Susu</span>
-          </div>
-        </div>
-        <Link
-          to={`/s/${slug}`}
-          className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-        >
-          ← Group page
-        </Link>
-      </div>
-    </header>
-  )
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-950">
@@ -101,14 +93,6 @@ export default function SusuJoin() {
                 ? 'This susu has already started and is no longer accepting new members.'
                 : 'This susu is no longer accepting new members.'}
           </p>
-          {info && (
-            <Link
-              to={`/s/${slug}`}
-              className="inline-block mt-6 text-sm px-4 py-2 rounded-lg bg-brand-700 text-white hover:bg-brand-600 transition-colors"
-            >
-              View group
-            </Link>
-          )}
         </div>
       </div>
     )
@@ -123,15 +107,9 @@ export default function SusuJoin() {
         <div className="mx-auto max-w-sm px-4 py-16 text-center">
           <span className="text-5xl block mb-4">✅</span>
           <h1 className="text-xl font-bold text-white mb-2">Request Sent!</h1>
-          <p className="text-sm text-gray-400 mb-6">
+          <p className="text-sm text-gray-400">
             {organizerDisplay} will be in touch.
           </p>
-          <Link
-            to={`/s/${slug}`}
-            className="text-sm px-4 py-2 rounded-lg bg-brand-700 text-white hover:bg-brand-600 transition-colors"
-          >
-            View group page
-          </Link>
         </div>
       </div>
     )
@@ -160,6 +138,13 @@ export default function SusuJoin() {
             </p>
           )}
         </div>
+
+        {info.rules && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Group Rules</p>
+            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{info.rules}</p>
+          </div>
+        )}
 
         <div className="rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
           <h2 className="text-base font-semibold text-white mb-4">Request to join</h2>
@@ -202,21 +187,13 @@ export default function SusuJoin() {
               />
             </div>
 
-            <div className="space-y-2">
-              <button
-                type="submit"
-                disabled={submit.isPending || !form.name.trim() || !form.phone.trim()}
-                className="w-full py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
-              >
-                {submit.isPending ? 'Submitting…' : 'Request to Join'}
-              </button>
-              <Link
-                to={`/s/${slug}`}
-                className="block w-full py-3 text-center text-sm font-medium text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                Decline / Not interested
-              </Link>
-            </div>
+            <button
+              type="submit"
+              disabled={submit.isPending || !form.name.trim() || !form.phone.trim()}
+              className="w-full py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
+            >
+              {submit.isPending ? 'Submitting…' : 'Request to Join'}
+            </button>
           </form>
         </div>
 

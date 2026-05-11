@@ -274,6 +274,7 @@ class SusuJoinPageInfo(BaseModel):
     frequency: Optional[SusuFrequency] = None
     total_members: Optional[int] = None
     organizer_name: Optional[str] = None
+    rules: Optional[str] = None
 
 
 class SusuPayPageInfo(BaseModel):
