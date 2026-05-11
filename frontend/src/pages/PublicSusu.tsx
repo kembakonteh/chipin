@@ -141,13 +141,6 @@ export default function PublicSusu() {
               <span className="block text-sm font-bold text-white">ChipIn · Susu</span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate(`/susu/${slug}`)}
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1"
-          >
-            ← Manage
-          </button>
         </div>
       </header>
 
@@ -301,30 +294,6 @@ export default function PublicSusu() {
           </details>
         )}
 
-        {/* Feature 5: Share button */}
-        <div className="rounded-xl border border-gray-700 bg-gray-900 p-5 text-center space-y-3">
-          <p className="text-sm text-gray-400">Know someone who should join?</p>
-          <div className="flex gap-3 justify-center">
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Join our Susu group '${group.name}' on ChipIn! Pay your contribution online here: ${window.location.origin}/s/${slug}`)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm px-4 py-2 rounded-lg bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors"
-            >
-              Share via WhatsApp
-            </a>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/s/${slug}`)
-                  .then(() => alert('Link copied!'))
-                  .catch(() => {})
-              }}
-              className="text-sm px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
-            >
-              Copy link
-            </button>
-          </div>
-        </div>
 
         <p className="text-center text-xs text-gray-600 pb-4">
           Powered by KafoTech ChipIn
