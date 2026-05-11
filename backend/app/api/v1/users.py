@@ -21,6 +21,7 @@ class UserMeResponse(BaseModel):
 
 
 class UserMeUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
     phone: Optional[str] = Field(None, max_length=50)
 
 @router.get("/me", response_model=UserMeResponse)
@@ -34,6 +35,8 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserMeResponse:
+    if body.name is not None:
+        current_user.name = body.name.strip()
     if body.phone is not None:
         current_user.phone = body.phone.strip() or None
     await db.commit()

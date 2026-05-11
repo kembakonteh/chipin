@@ -776,26 +776,35 @@ export default function SusuDetail() {
         </div>
 
         {/* Start button for forming groups */}
-        {group.status === 'forming' && (
-          <div className="rounded-xl border border-yellow-800/50 bg-yellow-900/10 p-5">
-            <p className="text-sm font-semibold text-yellow-300 mb-1">Ready to start?</p>
-            <p className="text-xs text-gray-400 mb-4">
-              {group.total_members} member{group.total_members !== 1 ? 's' : ''} added.
-              Starting will lock the member list and create all {group.total_cycles} cycle records.
-            </p>
-            <button
-              onClick={() => startGroup.mutate()}
-              disabled={startGroup.isPending || group.total_members < 2}
-              className="px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg
-                hover:bg-brand-500 disabled:opacity-50 transition-colors"
-            >
-              {startGroup.isPending ? 'Starting…' : '▶ Start Susu'}
-            </button>
-            {group.total_members < 2 && (
-              <p className="text-xs text-yellow-600 mt-2">Need at least 2 members to start.</p>
-            )}
-          </div>
-        )}
+        {group.status === 'forming' && (() => {
+          const expectedCycles = group.members.reduce((sum, m) => sum + m.slots, 0)
+          const cyclesMismatch = expectedCycles > 0 && group.total_cycles !== expectedCycles
+          return (
+            <div className="rounded-xl border border-yellow-800/50 bg-yellow-900/10 p-5">
+              <p className="text-sm font-semibold text-yellow-300 mb-1">Ready to start?</p>
+              <p className="text-xs text-gray-400 mb-4">
+                {group.total_members} member{group.total_members !== 1 ? 's' : ''} added.
+                Starting will lock the member list and create all {expectedCycles || group.total_cycles} cycle records.
+              </p>
+              <button
+                onClick={() => startGroup.mutate()}
+                disabled={startGroup.isPending || group.total_members < 2}
+                className="px-5 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg
+                  hover:bg-brand-500 disabled:opacity-50 transition-colors"
+              >
+                {startGroup.isPending ? 'Starting…' : '▶ Start Susu'}
+              </button>
+              {group.total_members < 2 && (
+                <p className="text-xs text-yellow-600 mt-2">Need at least 2 members to start.</p>
+              )}
+              {cyclesMismatch && (
+                <p className="text-xs text-orange-400 mt-2">
+                  ⚠️ Cycle count mismatch — you have {expectedCycles} member slot{expectedCycles !== 1 ? 's' : ''} but {group.total_cycles} cycle{group.total_cycles !== 1 ? 's' : ''} configured. This will be auto-corrected when you start the susu.
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Join requests — forming groups only */}
         {group.status === 'forming' && (() => {

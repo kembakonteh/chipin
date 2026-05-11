@@ -74,7 +74,7 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 def _owner_display_name(owner) -> str:
     """Return a readable name for the owner, stripping email domains if needed."""
     if not owner:
-        return "the organiser"
+        return "the organizer"
     raw = owner.name or ''
     if '@' in raw:
         raw = raw.split('@')[0]
@@ -499,6 +499,8 @@ async def add_susu_member(
     )
     db.add(member)
     group.total_members += 1
+    if group.status == SusuStatus.forming:
+        group.total_cycles = sum(m.slots for m in group.members) + body.slots
     await db.commit()
     await db.refresh(member)
     return member
@@ -560,6 +562,8 @@ async def remove_susu_member(
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
 
+    if group.status == SusuStatus.forming:
+        group.total_cycles = max(0, group.total_cycles - member.slots)
     await db.delete(member)
     group.total_members = max(0, group.total_members - 1)
     await db.commit()

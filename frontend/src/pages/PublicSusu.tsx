@@ -163,7 +163,7 @@ export default function PublicSusu() {
           <h1 className="text-2xl font-bold text-white">{group.name}</h1>
           {group.organizer_first_name && (
             <p className="text-xs text-gray-500 mt-1">
-              Organised by <span className="text-gray-300">{group.organizer_first_name}</span>
+              Organized by <span className="text-gray-300">{group.organizer_first_name}</span>
             </p>
           )}
         </div>

@@ -115,6 +115,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
 
   const [me, setMe] = useState<UserMe | null>(null)
+  const [name, setName] = useState('')
+  const [nameEditing, setNameEditing] = useState(false)
+  const [nameSaving, setNameSaving] = useState(false)
   const [phone, setPhone] = useState('')
   const [phoneEditing, setPhoneEditing] = useState(false)
   const [phoneSaving, setPhoneSaving] = useState(false)
@@ -122,9 +125,26 @@ export default function ProfilePage() {
   useEffect(() => {
     api.get<UserMe>('/users/me').then(r => {
       setMe(r.data)
+      setName(r.data.name ?? '')
       setPhone(r.data.phone ?? '')
     }).catch(() => {})
   }, [])
+
+  async function handleSaveName() {
+    if (!name.trim()) return
+    setNameSaving(true)
+    try {
+      const { data } = await api.patch<UserMe>('/users/me', { name: name.trim() })
+      setMe(data)
+      setName(data.name ?? '')
+      setNameEditing(false)
+      toast.success('Name saved')
+    } catch {
+      toast.error('Failed to save name')
+    } finally {
+      setNameSaving(false)
+    }
+  }
 
   async function handleSavePhone() {
     setPhoneSaving(true)
@@ -192,6 +212,72 @@ export default function ProfilePage() {
             <span style={{ fontSize: '13px', color: '#6b7280' }}>{me.email}</span>
           </div>
         )}
+        {/* Full name */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 500 }}>Full name</span>
+            {!nameEditing && (
+              <button
+                type="button"
+                onClick={() => setNameEditing(true)}
+                style={{ fontSize: '13px', color: '#40916c', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          {nameEditing ? (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your full name"
+                style={{
+                  flex: 1,
+                  background: '#1f2937',
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSaveName}
+                disabled={nameSaving || !name.trim()}
+                style={{
+                  padding: '8px 14px',
+                  background: '#065f46',
+                  color: '#6ee7b7',
+                  border: '1px solid #047857',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  cursor: (nameSaving || !name.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (nameSaving || !name.trim()) ? 0.6 : 1,
+                }}
+              >
+                {nameSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNameEditing(false); setName(me?.name ?? '') }}
+                style={{ padding: '8px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px' }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: '14px', color: me?.name ? '#d1d5db' : '#4b5563', margin: 0 }}>
+              {me?.name ?? 'Not set'}
+            </p>
+          )}
+          <p style={{ fontSize: '11px', color: '#4b5563', margin: '4px 0 0' }}>
+            Shown as the organizer name on your public susu pages.
+          </p>
+        </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
             <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 500 }}>Phone number</span>

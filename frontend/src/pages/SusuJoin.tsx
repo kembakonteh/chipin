@@ -130,7 +130,7 @@ export default function SusuJoin() {
           <h1 className="text-xl font-bold text-white">{info.name}</h1>
           {info.organizer_name && (
             <p className="text-xs text-gray-500 mt-1">
-              Organised by <span className="text-gray-300">{info.organizer_name.split(' ')[0]}</span>
+              Organized by <span className="text-gray-300">{info.organizer_name.split(' ')[0]}</span>
             </p>
           )}
         </div>
