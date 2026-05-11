@@ -162,14 +162,14 @@ export default function SusuStandings() {
           )}
         </div>
 
-        {data.cycle_summaries.length > 0 && (
+        {(data.cycle_summaries?.length ?? 0) > 0 && (
           <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800">
               <h2 className="font-semibold text-white">Payout Schedule</h2>
               <p className="text-xs text-gray-500 mt-0.5">Who receives the pot each cycle</p>
             </div>
             <div className="divide-y divide-gray-800">
-              {data.cycle_summaries.map(s => {
+              {(data.cycle_summaries ?? []).map(s => {
                 const isCurrent = s.cycle_number === data.current_cycle
                 return (
                   <div key={s.id} className={`flex items-center justify-between px-5 py-3 ${isCurrent ? 'bg-brand-900/10' : ''}`}>

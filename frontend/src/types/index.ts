@@ -178,7 +178,7 @@ export interface SusuStandingsData {
   frequency: SusuFrequency
   total_members: number
   members: SusuMemberStanding[]
-  cycle_summaries: SusuCycleSummary[]
+  cycle_summaries?: SusuCycleSummary[]
 }
 
 export type CollectionCurrency = 'USD' | 'GBP' | 'EUR' | 'CAD'
