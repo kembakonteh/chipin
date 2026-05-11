@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
@@ -219,6 +219,16 @@ export default function PublicSusu() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Group Rules</p>
             <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{group.rules}</p>
           </div>
+        )}
+
+        {/* Request to Join */}
+        {group.accepting_members && (
+          <Link
+            to={`/s/${slug}/join`}
+            className="block w-full py-3 bg-brand-600 text-white font-semibold rounded-xl text-center hover:bg-brand-500 transition-colors"
+          >
+            Request to Join
+          </Link>
         )}
 
         {/* Current cycle progress */}

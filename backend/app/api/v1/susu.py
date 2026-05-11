@@ -71,6 +71,16 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _owner_display_name(owner) -> str:
+    """Return a readable name for the owner, stripping email domains if needed."""
+    if not owner:
+        return "the organiser"
+    raw = owner.name or ''
+    if '@' in raw:
+        raw = raw.split('@')[0]
+    return raw.strip() or owner.email.split('@')[0]
+
+
 def _slugify(text: str) -> str:
     slug = text.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)
@@ -164,7 +174,7 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
             status=cycle.status,
         ))
 
-    organizer_first_name = group.owner.name.split()[0] if group.owner and group.owner.name else None
+    organizer_first_name = _owner_display_name(group.owner).split()[0] if group.owner else None
 
     return SusuDetailResponse(
         id=group.id,
@@ -2053,7 +2063,7 @@ async def get_susu_join_info(
         contribution_amount=group.contribution_amount,
         frequency=group.frequency,
         total_members=group.total_members,
-        organizer_name=group.owner.name if group.owner else "the organiser",
+        organizer_name=_owner_display_name(group.owner),
         rules=group.rules,
         payment_window_days=group.payment_window_days,
     )
