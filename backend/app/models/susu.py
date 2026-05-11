@@ -117,6 +117,8 @@ class SusuGroup(Base, UUIDMixin):
     zelle_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Recipient exemption policy
     recipient_must_pay: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    # Join request gate — auto-disabled when susu starts
+    accepting_members: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     owner: Mapped["User"] = relationship("User")
     org: Mapped[Optional["Org"]] = relationship("Org")

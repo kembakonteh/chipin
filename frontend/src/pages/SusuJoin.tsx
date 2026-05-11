@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
-import type { SusuGroup, SusuFrequency } from '../types'
+import type { SusuJoinPageInfo, SusuFrequency } from '../types'
 import { fmt } from '../types'
 
 function getData<T>(r: AxiosResponse<T>): T { return r.data }
@@ -14,26 +14,24 @@ const FREQ_LABELS: Record<SusuFrequency, string> = {
   monthly: 'Monthly',
 }
 
-type PageState = 'form' | 'success' | 'error'
+type PageState = 'form' | 'success'
 
 interface JoinForm {
   name: string
   phone: string
-  email: string
   message: string
 }
 
-const EMPTY: JoinForm = { name: '', phone: '', email: '', message: '' }
+const EMPTY: JoinForm = { name: '', phone: '', message: '' }
 
 export default function SusuJoin() {
   const { slug } = useParams<{ slug: string }>()
   const [state, setState] = useState<PageState>('form')
   const [form, setForm] = useState<JoinForm>(EMPTY)
-  const [errorMsg, setErrorMsg] = useState('')
 
-  const { data: group, isLoading } = useQuery<SusuGroup>({
-    queryKey: ['public-susu-info', slug],
-    queryFn: () => api.get<SusuGroup>(`/s/${slug}`).then(getData),
+  const { data: info, isLoading } = useQuery<SusuJoinPageInfo>({
+    queryKey: ['susu-join-info', slug],
+    queryFn: () => api.get<SusuJoinPageInfo>(`/s/${slug}/join-info`).then(getData),
   })
 
   const submit = useMutation({
@@ -41,14 +39,12 @@ export default function SusuJoin() {
       api.post(`/s/${slug}/join`, {
         name: form.name.trim(),
         phone: form.phone.trim(),
-        email: form.email.trim() || null,
         message: form.message.trim() || null,
       }),
     onSuccess: () => setState('success'),
     onError: (err: any) => {
       const detail = err?.response?.data?.detail ?? 'Something went wrong. Please try again.'
-      setErrorMsg(detail)
-      setState('error')
+      alert(detail)
     },
   })
 
@@ -89,30 +85,36 @@ export default function SusuJoin() {
     )
   }
 
-  if (!group || group.status !== 'forming') {
+  if (!info || !info.accepting) {
     return (
       <div className="min-h-screen bg-gray-950">
         {headerEl}
         <div className="mx-auto max-w-sm px-4 py-16 text-center">
           <span className="text-4xl block mb-4">🔒</span>
-          <h1 className="text-xl font-bold text-white mb-2">Not Accepting Requests</h1>
+          <h1 className="text-xl font-bold text-white mb-2">
+            {!info ? 'Group Not Found' : 'No Longer Accepting Members'}
+          </h1>
           <p className="text-sm text-gray-400">
-            {!group
+            {!info
               ? 'This Susu group could not be found.'
-              : 'This group is no longer accepting new join requests.'}
+              : 'This susu is no longer accepting new members.'}
           </p>
-          <Link
-            to={`/s/${slug}`}
-            className="inline-block mt-6 text-sm px-4 py-2 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
-          >
-            View group
-          </Link>
+          {info && (
+            <Link
+              to={`/s/${slug}`}
+              className="inline-block mt-6 text-sm px-4 py-2 rounded-lg bg-brand-700 text-white hover:bg-brand-600 transition-colors"
+            >
+              View group
+            </Link>
+          )}
         </div>
       </div>
     )
   }
 
   if (state === 'success') {
+    const organizer = info.organizer_name ?? 'The organiser'
+    const organizerDisplay = organizer.charAt(0).toUpperCase() + organizer.slice(1)
     return (
       <div className="min-h-screen bg-gray-950">
         {headerEl}
@@ -120,34 +122,14 @@ export default function SusuJoin() {
           <span className="text-5xl block mb-4">✅</span>
           <h1 className="text-xl font-bold text-white mb-2">Request Sent!</h1>
           <p className="text-sm text-gray-400 mb-6">
-            Your request to join <span className="text-white font-medium">{group.name}</span> has been submitted.
-            The organiser will review it and add you to the group.
+            {organizerDisplay} will be in touch.
           </p>
           <Link
             to={`/s/${slug}`}
-            className="text-sm px-4 py-2 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
+            className="text-sm px-4 py-2 rounded-lg bg-brand-700 text-white hover:bg-brand-600 transition-colors"
           >
             View group page
           </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (state === 'error') {
-    return (
-      <div className="min-h-screen bg-gray-950">
-        {headerEl}
-        <div className="mx-auto max-w-sm px-4 py-16 text-center">
-          <span className="text-5xl block mb-4">⚠️</span>
-          <h1 className="text-xl font-bold text-white mb-2">Request Failed</h1>
-          <p className="text-sm text-gray-400 mb-6">{errorMsg}</p>
-          <button
-            onClick={() => setState('form')}
-            className="text-sm px-4 py-2 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
-          >
-            Try again
-          </button>
         </div>
       </div>
     )
@@ -159,11 +141,22 @@ export default function SusuJoin() {
       <main className="mx-auto max-w-sm px-4 py-8 space-y-6">
         <div className="text-center">
           <div className="text-4xl mb-3">🤝</div>
-          <h1 className="text-xl font-bold text-white">{group.name}</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {FREQ_LABELS[group.frequency]} · {fmt(parseFloat(group.contribution_amount))}/member
-          </p>
-          <p className="text-xs text-gray-600 mt-1">{group.total_members} member{group.total_members !== 1 ? 's' : ''} so far</p>
+          <h1 className="text-xl font-bold text-white">{info.name}</h1>
+          {info.frequency && info.contribution_amount && (
+            <p className="text-sm text-gray-400 mt-1">
+              {FREQ_LABELS[info.frequency]} · {fmt(parseFloat(String(info.contribution_amount)))}/member
+            </p>
+          )}
+          {info.total_members != null && (
+            <p className="text-xs text-gray-600 mt-1">
+              {info.total_members} member{info.total_members !== 1 ? 's' : ''} so far
+            </p>
+          )}
+          {info.organizer_name && (
+            <p className="text-xs text-gray-500 mt-1">
+              Organised by <span className="text-gray-300">{info.organizer_name}</span>
+            </p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
@@ -196,17 +189,6 @@ export default function SusuJoin() {
             </div>
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Email (optional)</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="you@example.com"
-                className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
               <label className="block text-xs text-gray-400 mb-1.5">Message to organiser (optional)</label>
               <textarea
                 value={form.message}
@@ -218,13 +200,21 @@ export default function SusuJoin() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={submit.isPending || !form.name.trim() || !form.phone.trim()}
-              className="w-full py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
-            >
-              {submit.isPending ? 'Submitting…' : 'Send Join Request'}
-            </button>
+            <div className="space-y-2">
+              <button
+                type="submit"
+                disabled={submit.isPending || !form.name.trim() || !form.phone.trim()}
+                className="w-full py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
+              >
+                {submit.isPending ? 'Submitting…' : 'Request to Join'}
+              </button>
+              <Link
+                to={`/s/${slug}`}
+                className="block w-full py-3 text-center text-sm font-medium text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                Decline / Not interested
+              </Link>
+            </div>
           </form>
         </div>
 

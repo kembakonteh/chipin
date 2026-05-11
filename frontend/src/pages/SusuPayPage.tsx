@@ -10,6 +10,45 @@ function getData<T>(r: AxiosResponse<T>): T { return r.data }
 
 type PageState = 'info' | 'success' | 'already_paid' | 'pending_verification'
 
+function NameGate({ memberName, onConfirm }: { memberName: string; onConfirm: () => void }) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState('')
+  const firstName = memberName.split(' ')[0]
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (input.trim().toLowerCase() === memberName.trim().toLowerCase()) {
+      onConfirm()
+    } else {
+      setError(`This payment link is for ${firstName} only.`)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-xl space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-white mb-1">Confirm your identity</p>
+        <p className="text-xs text-gray-400">Enter your name to continue to the payment page.</p>
+      </div>
+      <input
+        required
+        type="text"
+        value={input}
+        onChange={e => { setInput(e.target.value); setError('') }}
+        placeholder="Your full name"
+        className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+      />
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      <button
+        type="submit"
+        className="w-full py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-500 transition-colors"
+      >
+        Continue
+      </button>
+    </form>
+  )
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   function handleCopy() {
@@ -36,6 +75,7 @@ export default function SusuPayPage() {
   const partnerParam = isPartner ? '?partner=1' : ''
   const [state, setState] = useState<PageState>('info')
   const [offlineMethod, setOfflineMethod] = useState<'cashapp' | 'zelle' | null>(null)
+  const [confirmed, setConfirmed] = useState(false)
 
   const { data: info, isLoading } = useQuery<SusuPayPageInfo>({
     queryKey: ['susu-pay-info', slug, member_id, isPartner],
@@ -103,6 +143,30 @@ export default function SusuPayPage() {
             View group
           </Link>
         </div>
+      </div>
+    )
+  }
+
+  if (!confirmed) {
+    return (
+      <div className="min-h-screen bg-gray-950">
+        {headerEl}
+        <main className="mx-auto max-w-sm px-4 py-8 space-y-6">
+          <div className="text-center">
+            <div className="text-4xl mb-3">🔐</div>
+            <h1 className="text-xl font-bold text-white">{info.group_name}</h1>
+            <p className="text-sm text-gray-400 mt-1">Cycle {info.cycle_number} payment</p>
+          </div>
+          <NameGate
+            memberName={info.member_name}
+            onConfirm={() => {
+              setConfirmed(true)
+              if (info.already_paid) setState('already_paid')
+              else if (info.pending_verification) setState('pending_verification')
+            }}
+          />
+          <p className="text-center text-xs text-gray-600 pb-4">Powered by KafoTech ChipIn</p>
+        </main>
       </div>
     )
   }

@@ -133,36 +133,20 @@ export default function SusuStandings() {
                       <span className="text-xs text-amber-400">🎁 Exempt (recipient)</span>
                     ) : data.status === 'active' && m.is_split ? (
                       <div className="flex flex-col gap-1 items-end">
-                        {!m.current_cycle_primary_paid && (
-                          <Link
-                            to={`/s/${slug}/pay/${m.id}`}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
-                          >
-                            {m.name} Pay
-                          </Link>
-                        )}
-                        {m.current_cycle_primary_paid && (
-                          <span className="text-xs text-emerald-500">✓ {m.name}</span>
-                        )}
-                        {!m.current_cycle_partner_paid && m.split_partner_name && (
-                          <Link
-                            to={`/s/${slug}/pay/${m.id}?partner=1`}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-violet-700/30 text-violet-300 hover:bg-violet-700/50 border border-violet-700/40 transition-colors"
-                          >
-                            {m.split_partner_name} Pay
-                          </Link>
-                        )}
-                        {m.current_cycle_partner_paid && m.split_partner_name && (
-                          <span className="text-xs text-emerald-500">✓ {m.split_partner_name}</span>
+                        {m.current_cycle_primary_paid
+                          ? <span className="text-xs text-emerald-500">✓ {m.name}</span>
+                          : <span className="text-xs text-gray-500">— {m.name}</span>
+                        }
+                        {m.split_partner_name && (
+                          m.current_cycle_partner_paid
+                            ? <span className="text-xs text-emerald-500">✓ {m.split_partner_name}</span>
+                            : <span className="text-xs text-gray-500">— {m.split_partner_name}</span>
                         )}
                       </div>
                     ) : data.status === 'active' ? (
-                      <Link
-                        to={`/s/${slug}/pay/${m.id}`}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
-                      >
-                        Pay Now
-                      </Link>
+                      m.current_cycle_primary_paid
+                        ? <span className="text-xs text-emerald-500">✓ Paid</span>
+                        : <span className="text-xs text-gray-500">Pending</span>
                     ) : null}
                   </div>
                 </div>
@@ -176,7 +160,7 @@ export default function SusuStandings() {
             to={`/s/${slug}`}
             className="text-sm px-4 py-2 rounded-lg bg-brand-700/30 text-brand-300 hover:bg-brand-700/50 border border-brand-700/40 transition-colors"
           >
-            View group & pay
+            View group
           </Link>
         </div>
 

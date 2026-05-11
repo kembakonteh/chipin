@@ -528,7 +528,7 @@ export default function SusuDetail() {
   const [rulesText, setRulesText] = useState('')
   // Payment settings
   const [editingPaymentSettings, setEditingPaymentSettings] = useState(false)
-  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true })
+  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true, accepting_members: true })
 
   const addMember = useMutation({
     mutationFn: () =>
@@ -602,6 +602,7 @@ export default function SusuDetail() {
       cashapp_handle: paySettings.cashapp_handle.trim() || null,
       zelle_handle: paySettings.zelle_handle.trim() || null,
       recipient_must_pay: paySettings.recipient_must_pay,
+      accepting_members: paySettings.accepting_members,
     }).then(getData),
     onSuccess: async () => {
       // Auto-append a rule note when the recipient exemption setting changes
@@ -1234,6 +1235,7 @@ export default function SusuDetail() {
                       cashapp_handle: group.cashapp_handle ?? '',
                       zelle_handle: group.zelle_handle ?? '',
                       recipient_must_pay: group.recipient_must_pay,
+                      accepting_members: group.accepting_members,
                     })
                     setEditingPaymentSettings(true)
                   }}
@@ -1263,7 +1265,21 @@ export default function SusuDetail() {
                     </label>
                   ))}
                 </div>
-                <div className="pt-1 border-t border-gray-800">
+                <div className="pt-1 border-t border-gray-800 space-y-3">
+                  {group.status === 'forming' && (
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={paySettings.accepting_members}
+                        onChange={e => setPaySettings(s => ({ ...s, accepting_members: e.target.checked }))}
+                        className="w-4 h-4 mt-0.5 accent-brand-500"
+                      />
+                      <div>
+                        <span className="text-sm text-gray-200">Accept new member requests</span>
+                        <p className="text-xs text-gray-500 mt-0.5">Turn off when susu is full or has started</p>
+                      </div>
+                    </label>
+                  )}
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -1340,6 +1356,14 @@ export default function SusuDetail() {
                     {group.recipient_must_pay ? 'Required' : 'Exempt'}
                   </span>
                 </p>
+                {group.status === 'forming' && (
+                  <p className="text-xs text-gray-500">
+                    Join requests:{' '}
+                    <span className={group.accepting_members ? 'text-emerald-400' : 'text-gray-500'}>
+                      {group.accepting_members ? 'Open' : 'Closed'}
+                    </span>
+                  </p>
+                )}
               </div>
             )}
           </div>

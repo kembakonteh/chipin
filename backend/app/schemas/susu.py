@@ -30,6 +30,8 @@ class SusuGroupCreate(BaseModel):
     zelle_handle: Optional[str] = Field(None, max_length=100)
     # Recipient exemption policy
     recipient_must_pay: bool = True
+    # Join request gate
+    accepting_members: bool = True
 
 
 class SusuGroupUpdate(BaseModel):
@@ -175,6 +177,8 @@ class SusuGroupResponse(BaseModel):
     zelle_handle: Optional[str] = None
     # Recipient exemption policy
     recipient_must_pay: bool = True
+    # Join request gate
+    accepting_members: bool = True
 
 
 class SusuDetailResponse(SusuGroupResponse):
@@ -257,6 +261,16 @@ class SusuPaymentSettingsUpdate(BaseModel):
     cashapp_handle: Optional[str] = Field(None, max_length=100)
     zelle_handle: Optional[str] = Field(None, max_length=100)
     recipient_must_pay: Optional[bool] = None
+    accepting_members: Optional[bool] = None
+
+
+class SusuJoinPageInfo(BaseModel):
+    accepting: bool
+    name: Optional[str] = None
+    contribution_amount: Optional[Decimal] = None
+    frequency: Optional[SusuFrequency] = None
+    total_members: Optional[int] = None
+    organizer_name: Optional[str] = None
 
 
 class SusuPayPageInfo(BaseModel):

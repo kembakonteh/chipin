@@ -46,6 +46,7 @@ from app.schemas.susu import (
     SusuGroupCreate,
     SusuGroupResponse,
     SusuGroupUpdate,
+    SusuJoinPageInfo,
     SusuJoinRequestCreate,
     SusuJoinRequestResponse,
     SusuMemberCreate,
@@ -188,6 +189,7 @@ def _build_detail(group: SusuGroup) -> SusuDetailResponse:
         cashapp_handle=group.cashapp_handle,
         zelle_handle=group.zelle_handle,
         recipient_must_pay=group.recipient_must_pay,
+        accepting_members=group.accepting_members,
         members=members,
         current_cycle_detail=current_cycle_detail,
         cycle_summaries=summaries,
@@ -235,6 +237,7 @@ async def create_susu_group(
         cashapp_handle=body.cashapp_handle,
         zelle_handle=body.zelle_handle,
         recipient_must_pay=body.recipient_must_pay,
+        accepting_members=body.accepting_members,
     )
     db.add(group)
     await db.commit()
@@ -621,6 +624,7 @@ async def start_susu(
         ))
 
     group.status = SusuStatus.active
+    group.accepting_members = False
     group.total_members = n
     group.current_cycle = 1
     group.next_contribution_date = cycle_records[0].due_date
@@ -1970,6 +1974,37 @@ async def public_susu_standings(
         frequency=group.frequency,
         total_members=group.total_members,
         members=standings,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /s/{slug}/join-info — public join page info
+# ---------------------------------------------------------------------------
+
+@public_router.get("/s/{slug}/join-info", response_model=SusuJoinPageInfo)
+async def get_susu_join_info(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SusuGroup)
+        .options(selectinload(SusuGroup.owner))
+        .where(SusuGroup.slug == slug)
+    )
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Susu group not found")
+
+    if group.status != SusuStatus.forming or not group.accepting_members:
+        return SusuJoinPageInfo(accepting=False)
+
+    return SusuJoinPageInfo(
+        accepting=True,
+        name=group.name,
+        contribution_amount=group.contribution_amount,
+        frequency=group.frequency,
+        total_members=group.total_members,
+        organizer_name=group.owner.name if group.owner else "the organiser",
     )
 
 

@@ -95,6 +95,7 @@ export interface SusuGroup {
   cashapp_handle: string | null
   zelle_handle: string | null
   recipient_must_pay: boolean
+  accepting_members: boolean
 }
 
 export interface SusuPayPageInfo {
@@ -149,6 +150,15 @@ export interface SusuMemberStanding {
   current_cycle_primary_paid: boolean
   current_cycle_partner_paid: boolean
   current_cycle_is_exempt: boolean
+}
+
+export interface SusuJoinPageInfo {
+  accepting: boolean
+  name?: string | null
+  contribution_amount?: string | null
+  frequency?: SusuFrequency | null
+  total_members?: number | null
+  organizer_name?: string | null
 }
 
 export interface SusuStandingsData {
