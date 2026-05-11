@@ -742,13 +742,37 @@ async def mark_contribution_paid(
             if member:
                 member.total_contributed += contrib.amount
 
-    # Auto-collect cycle if all contributions are fully paid
-    unpaid = [c for c in cycle.contributions if not c.paid]
+    # Auto-collect cycle if all contributions are fully paid (exempt contributions count as paid)
+    unpaid = [c for c in cycle.contributions if not c.paid and not c.is_exempt]
+    just_collected = False
+    all_paid_rname = None
+    all_paid_pot = None
     if not unpaid:
         cycle.status = SusuCycleStatus.collected
+        just_collected = True
+        all_paid_rname = next(
+            (c.member.name for c in cycle.contributions if c.member_id == cycle.recipient_member_id and c.member),
+            "the recipient",
+        )
+        all_paid_pot = cycle.pot_amount
 
     await db.commit()
     await db.refresh(contrib)
+
+    # Notify organizer via WhatsApp when all members have paid
+    if just_collected:
+        owner_result = await db.execute(select(User).where(User.id == group.owner_id))
+        owner = owner_result.scalar_one_or_none()
+        if owner and owner.phone:
+            all_paid_msg = (
+                f"🎉 All members have paid for Cycle {cycle_number} of '{group.name}'! "
+                f"Confirm you have sent the payout of ${all_paid_pot:.2f} to {all_paid_rname}."
+            )
+            try:
+                from app.workers.tasks import _send_whatsapp_text
+                await _send_whatsapp_text(owner.phone, all_paid_msg)
+            except Exception as exc:
+                logger.warning("Failed to send all-paid WhatsApp to organizer: %s", exc)
 
     return SusuContributionResponse(
         id=contrib.id,
@@ -2022,6 +2046,26 @@ async def public_susu_standings(
 
     standings.sort(key=lambda s: s.total_contributed, reverse=True)
 
+    cycle_summaries = [
+        SusuCycleSummary(
+            id=c.id,
+            cycle_number=c.cycle_number,
+            due_date=c.due_date,
+            pot_amount=c.pot_amount,
+            collected_amount=c.collected_amount,
+            recipient_member_id=c.recipient_member_id,
+            recipient_name=next(
+                (m.name for m in group.members if m.id == c.recipient_member_id),
+                "Unknown",
+            ),
+            payout_sent_at=c.payout_sent_at,
+            payout_method=c.payout_method,
+            payout_reference=c.payout_reference,
+            status=c.status,
+        )
+        for c in cycles_sorted
+    ]
+
     return SusuStandingsResponse(
         id=group.id,
         name=group.name,
@@ -2033,6 +2077,7 @@ async def public_susu_standings(
         frequency=group.frequency,
         total_members=group.total_members,
         members=standings,
+        cycle_summaries=cycle_summaries,
     )
 
 

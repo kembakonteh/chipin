@@ -2,8 +2,21 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { AxiosResponse } from 'axios'
 import { api } from '../lib/api'
-import type { SusuStandingsData, SusuFrequency } from '../types'
+import type { SusuStandingsData, SusuFrequency, SusuCycleStatus } from '../types'
 import { fmt } from '../types'
+
+function formatDate(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  })
+}
+
+const CYCLE_STATUS_LABEL: Record<SusuCycleStatus, string> = {
+  collecting: 'Collecting',
+  collected: 'Collected',
+  paid_out: 'Paid out',
+  missed: 'Missed',
+}
 
 function getData<T>(r: AxiosResponse<T>): T { return r.data }
 
@@ -148,6 +161,41 @@ export default function SusuStandings() {
             </div>
           )}
         </div>
+
+        {data.cycle_summaries.length > 0 && (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Payout Schedule</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Who receives the pot each cycle</p>
+            </div>
+            <div className="divide-y divide-gray-800">
+              {data.cycle_summaries.map(s => {
+                const isCurrent = s.cycle_number === data.current_cycle
+                return (
+                  <div key={s.id} className={`flex items-center justify-between px-5 py-3 ${isCurrent ? 'bg-brand-900/10' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-5 text-center">#{s.cycle_number}</span>
+                      <div>
+                        <span className={`text-sm font-medium ${isCurrent ? 'text-brand-300' : 'text-gray-300'}`}>
+                          {s.recipient_name}
+                        </span>
+                        <div className="text-xs text-gray-600 mt-0.5">{formatDate(s.due_date)}</div>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded capitalize ${
+                      s.status === 'paid_out' ? 'bg-purple-900/40 text-purple-300' :
+                      s.status === 'collected' ? 'bg-emerald-900/40 text-emerald-300' :
+                      isCurrent ? 'bg-blue-900/40 text-blue-300' :
+                      'text-gray-600'
+                    }`}>
+                      {s.status === 'paid_out' || s.status === 'collected' ? CYCLE_STATUS_LABEL[s.status] : isCurrent ? 'Now' : '—'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <p className="text-center text-xs text-gray-600 pb-4">
           Powered by KafoTech ChipIn

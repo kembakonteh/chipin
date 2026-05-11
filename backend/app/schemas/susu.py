@@ -239,6 +239,7 @@ class SusuStandingsResponse(BaseModel):
     frequency: SusuFrequency
     total_members: int
     members: List[SusuMemberStanding]
+    cycle_summaries: List[SusuCycleSummary] = []
 
 
 class SusuJoinRequestCreate(BaseModel):

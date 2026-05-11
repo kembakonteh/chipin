@@ -598,6 +598,19 @@ export default function SusuDetail() {
     },
   })
 
+  const confirmAndAdvance = useMutation({
+    mutationFn: async (cycleNum: number) => {
+      await api.post(`/susu/${slug}/cycles/${cycleNum}/mark-paid-out`, { payout_method: 'cash', payout_reference: null })
+      await api.post(`/susu/${slug}/advance`)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['susu', slug] })
+      qc.invalidateQueries({ queryKey: ['susu-history', slug] })
+      toast.success('Payout confirmed — cycle advanced!')
+    },
+    onError: () => toast.error('Failed to confirm payout'),
+  })
+
   // Feature 8: Save group rules
   const saveRules = useMutation({
     mutationFn: (newRules: string) =>
@@ -768,22 +781,12 @@ export default function SusuDetail() {
         {/* Action bar — always visible */}
         <div className="flex items-center gap-2 flex-wrap border border-gray-800 rounded-xl px-4 py-3 bg-gray-900">
           {group.status === 'active' && (
-            <>
-              <a
-                href={`/s/${slug}/standings`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600 transition-colors"
-              >
-                📊 Public Standings
-              </a>
-              <button
-                onClick={handleShareStandings}
-                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-600 transition-colors"
-              >
-                📱 Share Standings
-              </button>
-            </>
+            <button
+              onClick={handleShareStandings}
+              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-600 transition-colors"
+            >
+              📱 Share Standings
+            </button>
           )}
           <div className="flex-1" />
           <button
@@ -961,16 +964,38 @@ export default function SusuDetail() {
               })}
             </div>
 
-            {/* Mark payout sent */}
-            {cycle.status === 'collected' && !cycle.payout_sent_at && (
-              <button
-                onClick={() => setShowPayoutModal(true)}
-                className="mt-4 w-full py-2.5 bg-purple-700 text-white text-sm font-semibold rounded-lg
-                  hover:bg-purple-600 transition-colors"
-              >
-                💸 Mark Payout Sent to {cycle.recipient_name}
-              </button>
-            )}
+            {/* All-paid banner: quick confirm-and-advance */}
+            {(() => {
+              const allPaid = cycle.contributions.every(c => c.paid || c.is_exempt)
+              if (allPaid && !cycleIsPaidOut) {
+                return (
+                  <div className="mt-4 rounded-xl border border-emerald-700 bg-emerald-900/20 p-4">
+                    <p className="text-sm font-semibold text-emerald-300 mb-1">✅ All members have paid!</p>
+                    <p className="text-xs text-gray-400 mb-3">
+                      Confirm you have sent the payout to <span className="text-white font-medium">{cycle.recipient_name}</span> to advance to the next cycle.
+                    </p>
+                    <button
+                      onClick={() => confirmAndAdvance.mutate(cycle.cycle_number)}
+                      disabled={confirmAndAdvance.isPending}
+                      className="w-full py-2.5 bg-emerald-700 text-white text-sm font-semibold rounded-lg
+                        hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                    >
+                      {confirmAndAdvance.isPending ? 'Confirming…' : `Confirm Payout Sent & Advance →`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPayoutModal(true)}
+                      className="mt-2 w-full py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      Log payout details (method/reference)
+                    </button>
+                  </div>
+                )
+              }
+              return null
+            })()}
+
+            {/* Payout sent confirmation */}
             {cycle.payout_sent_at && (
               <div className="mt-3 text-center">
                 <p className="text-xs text-purple-400">
@@ -985,7 +1010,18 @@ export default function SusuDetail() {
               </div>
             )}
 
-            {/* Advance to next cycle */}
+            {/* Manual payout button (fallback when not all paid) */}
+            {cycle.status === 'collected' && !cycle.payout_sent_at && !cycle.contributions.every(c => c.paid || c.is_exempt) && (
+              <button
+                onClick={() => setShowPayoutModal(true)}
+                className="mt-4 w-full py-2.5 bg-purple-700 text-white text-sm font-semibold rounded-lg
+                  hover:bg-purple-600 transition-colors"
+              >
+                💸 Mark Payout Sent to {cycle.recipient_name}
+              </button>
+            )}
+
+            {/* Advance to next cycle (when payout already confirmed separately) */}
             {cycleIsPaidOut && !isLastCycle && (
               <button
                 onClick={() => advanceCycle.mutate()}
