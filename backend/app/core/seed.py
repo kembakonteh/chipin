@@ -103,10 +103,10 @@ _TEMPLATES = [
         "is_active": True,
     },
     {
-        "name": "Graduation Gift",
+        "name": "Graduation Celebration",
         "campaign_type": CampaignType.celebration,
         "emoji": "🎓",
-        "description_template": "Graduation gift collection for {name}.",
+        "description_template": "Graduation celebration collection for {name}.",
         "default_amount_per_person": Decimal("20.00"),
         "default_visibility_mode": VisibilityMode.full_name,
         "default_anonymous": False,
@@ -114,13 +114,49 @@ _TEMPLATES = [
         "sort_order": 8,
         "is_active": True,
     },
-]
+    {
+        "name": "Naming Ceremony",
+        "campaign_type": CampaignType.celebration,
+        "emoji": "🎉",
+        "description_template": "Celebrate a new arrival with a naming ceremony gift collection.",
+        "default_amount_per_person": Decimal("20.00"),
+        "default_visibility_mode": VisibilityMode.full_name,
+        "default_anonymous": False,
+        "whatsapp_share_text_template": "Join us to celebrate the naming ceremony! 🎉 {url}",
+        "sort_order": 9,
+        "is_active": True,
+    },
+    {
+        "name": "Birthday Celebration",
+        "campaign_type": CampaignType.celebration,
+        "emoji": "🎂",
+        "description_template": "Collect contributions for a birthday celebration.",
+        "default_amount_per_person": Decimal("20.00"),
+        "default_visibility_mode": VisibilityMode.full_name,
+        "default_anonymous": False,
+        "whatsapp_share_text_template": "Chip in for {name}'s birthday celebration! 🎂 {url}",
+        "sort_order": 10,
+        "is_active": True,
+    },
+    {
+        "name": "Political Fundraiser",
+        "campaign_type": CampaignType.political,
+        "emoji": "🗳️",
+        "description_template": "Official fundraising campaign for {candidate_name}.",
+        "default_amount_per_person": None,
+        "default_visibility_mode": VisibilityMode.full_name,
+        "default_anonymous": False,
+        "whatsapp_share_text_template": "Support {candidate_name}'s campaign! Every contribution counts. 🗳️ {url}",
+        "sort_order": 11,
+        "is_active": True,
+    },
+_TEMPLATES_PLACEHOLDER
 
 
 async def seed_templates(db: AsyncSession) -> None:
     """Insert built-in templates, skipping any that already exist by name."""
     stmt = pg_insert(CampaignTemplate).values(_TEMPLATES).on_conflict_do_nothing(
-        index_elements=["name"]
+        index_elements=["name"_TEMPLATES_PLACEHOLDER
     )
     await db.execute(stmt)
     await db.commit()
