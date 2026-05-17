@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem *)",
+      "Bash(xargs grep -l \"logging\")",
+      "Bash(python -c \"from app.core.email import send_magic_link; from app.core.config import settings; print\\('OK — RESEND_API_KEY present:', bool\\(settings.RESEND_API_KEY\\)\\)\")",
+      "PowerShell(git *)",
+      "PowerShell(ssh -o StrictHostKeyChecking=accept-new -T git@github.com 2>&1)",
+      "Read(//mnt/c/Users/kkont/Desktop/dev/chipin/**)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\kkont\\\\Desktop\\\\dev\\\\chipin\\\\frontend\" -Recurse | Select-Object FullName | Where-Object { $_.FullName -notmatch \"node_modules\" } | Select-Object -First 80)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\kkont\\\\Desktop\\\\dev\\\\chipin\\\\frontend\" -Depth 5 | Where-Object { $_.FullName -notmatch \"node_modules|\\\\.git\" } | Select-Object FullName)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python -c ' *)",
+      "Bash(git commit *)",
+      "Bash(ssh *)",
+      "Bash(Select-Object FullName)",
+      "Bash(npx tsc *)",
+      "Bash(curl *)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(Sort-Object)"
+    ]
+  }
+}
