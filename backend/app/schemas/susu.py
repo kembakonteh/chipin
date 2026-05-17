@@ -26,6 +26,7 @@ class SusuGroupCreate(BaseModel):
     allow_card: bool = True
     allow_cashapp: bool = False
     allow_zelle: bool = False
+    allow_cash: bool = False
     cashapp_handle: Optional[str] = Field(None, max_length=100)
     zelle_handle: Optional[str] = Field(None, max_length=100)
     # Recipient exemption policy
@@ -175,6 +176,7 @@ class SusuGroupResponse(BaseModel):
     allow_card: bool = True
     allow_cashapp: bool = False
     allow_zelle: bool = False
+    allow_cash: bool = False
     cashapp_handle: Optional[str] = None
     zelle_handle: Optional[str] = None
     # Recipient exemption policy
@@ -266,6 +268,7 @@ class SusuPaymentSettingsUpdate(BaseModel):
     allow_card: Optional[bool] = None
     allow_cashapp: Optional[bool] = None
     allow_zelle: Optional[bool] = None
+    allow_cash: Optional[bool] = None
     cashapp_handle: Optional[str] = Field(None, max_length=100)
     zelle_handle: Optional[str] = Field(None, max_length=100)
     recipient_must_pay: Optional[bool] = None
@@ -298,6 +301,7 @@ class SusuPayPageInfo(BaseModel):
     allow_card: bool
     allow_cashapp: bool
     allow_zelle: bool
+    allow_cash: bool = False
     cashapp_handle: Optional[str]
     zelle_handle: Optional[str]
     # Split hand

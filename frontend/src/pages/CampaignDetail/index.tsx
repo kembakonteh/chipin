@@ -15,6 +15,11 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'settings',     label: 'Settings' },
 ]
 
+function tabLabel(id: Tab, campaignType: string | undefined): string {
+  if (id === 'contributors' && campaignType === 'celebration') return 'Guests'
+  return TABS.find(t => t.id === id)?.label ?? id
+}
+
 export default function CampaignDetail() {
   const { slug } = useParams<{ slug: string }>()
   const [sp, setSp] = useSearchParams()
@@ -97,7 +102,7 @@ export default function CampaignDetail() {
                   : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
                 }`}
             >
-              {t.label}
+              {tabLabel(t.id, campaign?.campaign_type)}
               {t.id === 'contributors' && contributors.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-gray-700 px-1.5 py-0.5 text-xs text-gray-400">
                   {contributors.length}

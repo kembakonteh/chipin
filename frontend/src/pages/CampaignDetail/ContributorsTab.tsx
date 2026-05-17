@@ -34,6 +34,8 @@ const PAY_METHODS: { value: PaidVia; label: string; icon: string }[] = [
 ]
 
 export default function ContributorsTab({ campaign, contributors }: Props) {
+  const isCelebration = campaign.campaign_type === 'celebration'
+  const isInvitationOnly = isCelebration && parseFloat(campaign.amount_per_person ?? '0') === 0
   const [payTarget, setPayTarget] = useState<Contributor | null>(null)
   const [inviteTarget, setInviteTarget] = useState<Contributor | null | 'new'>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -73,14 +75,16 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
         name: form.name.trim(),
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
-        amount: form.amount ? parseFloat(form.amount) : null,
-        is_anonymous: form.is_anonymous,
-        paid_via: form.paid_via || null,
-        note: form.note.trim() || null,
+        amount: isInvitationOnly ? null : (form.amount ? parseFloat(form.amount) : null),
+        is_anonymous: isInvitationOnly ? false : form.is_anonymous,
+        paid_via: isInvitationOnly ? null : (form.paid_via || null),
+        note: isInvitationOnly ? null : (form.note.trim() || null),
       }).then(r => r.data),
     onSuccess: (added) => {
       qc.invalidateQueries({ queryKey: ['contributors', campaign.slug] })
-      toast.success(added.paid ? `${added.name} added and marked paid` : 'Contributor added')
+      toast.success(added.paid
+        ? `${added.name} added and marked ${isCelebration ? 'attending' : 'paid'}`
+        : isCelebration ? 'Guest added' : 'Contributor added')
       setForm(EMPTY_FORM)
       setShowAdd(false)
     },
@@ -119,12 +123,35 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
     onError: () => toast.error('Failed to send reminders'),
   })
 
+  const confirmMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.patch(`/campaigns/${campaign.slug}/contributors/${id}`, { paid: true }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contributors', campaign.slug] })
+      toast.success('Marked as attending!')
+    },
+    onError: () => toast.error('Failed to confirm attendance'),
+  })
+
+  const declineMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/campaigns/${campaign.slug}/contributors/${id}`).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contributors', campaign.slug] })
+      toast.success('Guest removed')
+    },
+    onError: () => toast.error('Failed to remove guest'),
+  })
+
   return (
     <div className="space-y-4">
       {/* WhatsApp info banner */}
       <div className="flex items-start gap-2.5 rounded-lg border border-sky-900/50 bg-sky-950/30 px-3.5 py-2.5 text-xs text-sky-300/80">
         <span className="shrink-0 mt-px">📱</span>
-        <span>Contributors are notified via WhatsApp. Make sure phone numbers are saved for each contributor to enable reminders.</span>
+        <span>{isCelebration
+          ? 'Guests are notified via WhatsApp when invited.'
+          : 'Contributors are notified via WhatsApp. Make sure phone numbers are saved for each contributor to enable reminders.'
+        }</span>
       </div>
 
       {/* Actions bar */}
@@ -133,17 +160,22 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
         <p className="text-sm text-gray-400">
           <span className="text-white font-medium">{contributors.length}</span> total
           {' '}—{' '}
-          <span className="text-brand-400">{paid.length} paid</span>
-          {invited.length > 0 && (
-            <> · <span className="text-sky-400">{invited.length} invited</span></>
-          )}
-          {declined.length > 0 && (
-            <> · <span className="text-gray-500">{declined.length} declined</span></>
+          {isInvitationOnly ? (
+            <>
+              <span className="text-brand-400">{paid.length} attending</span>
+              {unpaid.length > 0 && <> · <span className="text-yellow-400">{unpaid.length} pending</span></>}
+            </>
+          ) : (
+            <>
+              <span className="text-brand-400">{paid.length} {isCelebration ? 'attending' : 'paid'}</span>
+              {invited.length > 0 && <> · <span className="text-sky-400">{invited.length} invited</span></>}
+              {declined.length > 0 && <> · <span className="text-gray-500">{declined.length} declined</span></>}
+            </>
           )}
         </p>
 
         <div className="flex gap-2 flex-wrap">
-          {unpaid.length > 0 && (
+          {unpaid.length > 0 && !isInvitationOnly && (
             <button
               type="button"
               onClick={() => remindAllMutation.mutate()}
@@ -161,23 +193,25 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
             className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs
               font-medium text-gray-300 hover:bg-gray-700 disabled:opacity-40 transition-colors"
           >
-            {exporting ? 'Exporting…' : '⬇ Export CSV'}
+            {exporting ? 'Exporting…' : isCelebration ? '⬇ Export Guest List' : '⬇ Export CSV'}
           </button>
-          <button
-            type="button"
-            onClick={() => { setInviteTarget('new'); setShowAdd(false) }}
-            className="rounded-lg border border-sky-700 bg-sky-700/20 px-3 py-1.5 text-xs
-              font-medium text-sky-300 hover:bg-sky-700/40 transition-colors"
-          >
-            📲 Invite Someone New
-          </button>
+          {!isInvitationOnly && (
+            <button
+              type="button"
+              onClick={() => { setInviteTarget('new'); setShowAdd(false) }}
+              className="rounded-lg border border-sky-700 bg-sky-700/20 px-3 py-1.5 text-xs
+                font-medium text-sky-300 hover:bg-sky-700/40 transition-colors"
+            >
+              {isCelebration ? '📲 Invite a Guest' : '📲 Invite Someone New'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowAdd(v => !v)}
             className="rounded-lg border border-brand-700 bg-brand-700/20 px-3 py-1.5 text-xs
               font-medium text-brand-300 hover:bg-brand-700/40 transition-colors"
           >
-            {showAdd ? 'Cancel' : '＋ Add contributor'}
+            {showAdd ? 'Cancel' : isCelebration ? '＋ Add guest' : '＋ Add contributor'}
           </button>
         </div>
       </div>
@@ -188,13 +222,13 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           onSubmit={handleAddSubmit}
           className="rounded-xl border border-brand-700/40 bg-brand-900/20 p-4 space-y-4"
         >
-          <p className="text-sm font-medium text-brand-200">Add contributor</p>
+          <p className="text-sm font-medium text-brand-200">{isCelebration ? 'Add guest' : 'Add contributor'}</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               value={form.name}
               onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))}
-              placeholder="Full name *"
+              placeholder={isCelebration ? 'Guest name *' : 'Contributor name *'}
               className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white
                 placeholder-gray-600 focus:border-brand-500 focus:outline-none"
             />
@@ -222,70 +256,74 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
             </p>
           </div>
 
-          <div className="flex gap-3 items-center flex-wrap">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-              <input
-                type="number"
-                value={form.amount}
-                onChange={(e) => setForm(p => ({ ...p, amount: e.target.value }))}
-                placeholder={campaign.amount_per_person ?? 'Amount'}
-                min="0"
-                step="0.01"
-                className="rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2 text-sm text-white
-                  placeholder-gray-600 focus:border-brand-500 focus:outline-none w-32"
-              />
+          {!isInvitationOnly && (
+            <div className="flex gap-3 items-center flex-wrap">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  value={form.amount}
+                  onChange={(e) => setForm(p => ({ ...p, amount: e.target.value }))}
+                  placeholder={campaign.amount_per_person ?? 'Amount'}
+                  min="0"
+                  step="0.01"
+                  className="rounded-lg border border-gray-700 bg-gray-800 pl-7 pr-3 py-2 text-sm text-white
+                    placeholder-gray-600 focus:border-brand-500 focus:outline-none w-32"
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.is_anonymous}
+                  onChange={(e) => setForm(p => ({ ...p, is_anonymous: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-500
+                    focus:ring-brand-500 focus:ring-offset-gray-900"
+                />
+                <span className="text-sm text-gray-300">Anonymous 🔒</span>
+              </label>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_anonymous}
-                onChange={(e) => setForm(p => ({ ...p, is_anonymous: e.target.checked }))}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-500
-                  focus:ring-brand-500 focus:ring-offset-gray-900"
-              />
-              <span className="text-sm text-gray-300">Anonymous 🔒</span>
-            </label>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <p className="text-xs text-gray-400">Already paid? Select method:</p>
-            <div className="flex flex-wrap gap-2">
-              {PAY_METHODS.map(m => (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, paid_via: p.paid_via === m.value ? null : m.value }))}
-                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium
-                    transition-colors ${
-                      form.paid_via === m.value
-                        ? 'border-brand-500 bg-brand-600/30 text-brand-200'
-                        : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
-                    }`}
-                >
-                  <span>{m.icon}</span>{m.label}
-                </button>
-              ))}
+          {!isInvitationOnly && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400">Already paid? Select method:</p>
+              <div className="flex flex-wrap gap-2">
+                {PAY_METHODS.map(m => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, paid_via: p.paid_via === m.value ? null : m.value }))}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium
+                      transition-colors ${
+                        form.paid_via === m.value
+                          ? 'border-brand-500 bg-brand-600/30 text-brand-200'
+                          : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                      }`}
+                  >
+                    <span>{m.icon}</span>{m.label}
+                  </button>
+                ))}
+                {form.paid_via && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, paid_via: null, note: '' }))}
+                    className="text-xs text-gray-500 hover:text-gray-300 px-1 transition-colors"
+                  >
+                    ✕ clear
+                  </button>
+                )}
+              </div>
               {form.paid_via && (
-                <button
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, paid_via: null, note: '' }))}
-                  className="text-xs text-gray-500 hover:text-gray-300 px-1 transition-colors"
-                >
-                  ✕ clear
-                </button>
+                <input
+                  value={form.note}
+                  onChange={(e) => setForm(p => ({ ...p, note: e.target.value }))}
+                  placeholder="Reference / confirmation number (optional)"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white
+                    placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                />
               )}
             </div>
-            {form.paid_via && (
-              <input
-                value={form.note}
-                onChange={(e) => setForm(p => ({ ...p, note: e.target.value }))}
-                placeholder="Reference / confirmation number (optional)"
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white
-                  placeholder-gray-600 focus:border-brand-500 focus:outline-none"
-              />
-            )}
-          </div>
+          )}
 
           <button
             type="submit"
@@ -295,9 +333,11 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           >
             {addMutation.isPending
               ? 'Adding…'
-              : form.paid_via
-                ? `Add & mark paid via ${PAY_METHODS.find(m => m.value === form.paid_via)?.label}`
-                : 'Add (unpaid)'}
+              : isInvitationOnly
+                ? 'Add Guest'
+                : form.paid_via
+                  ? `Add & mark paid via ${PAY_METHODS.find(m => m.value === form.paid_via)?.label}`
+                  : 'Add (unpaid)'}
           </button>
         </form>
       )}
@@ -305,7 +345,35 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
       {/* Contributor list */}
       {contributors.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-700 p-10 text-center">
-          <p className="text-gray-500 text-sm">No contributors yet.</p>
+          <p className="text-gray-500 text-sm">{isCelebration ? 'No guests yet.' : 'No contributors yet.'}</p>
+        </div>
+      ) : isInvitationOnly ? (
+        <div className="space-y-2">
+          {paid.length > 0 && (
+            <>
+              <p className="text-xs text-gray-500 uppercase tracking-wide px-1">Attending ({paid.length})</p>
+              {paid.map(c => (
+                <ContributorRow key={c.id} contributor={c} hideAmount showPhone />
+              ))}
+            </>
+          )}
+          {unpaid.length > 0 && (
+            <>
+              <p className={`text-xs text-gray-500 uppercase tracking-wide px-1 ${paid.length > 0 ? 'mt-4' : ''}`}>
+                Pending RSVP ({unpaid.length})
+              </p>
+              {unpaid.map(c => (
+                <ContributorRow
+                  key={c.id}
+                  contributor={c}
+                  hideAmount
+                  showPhone
+                  onConfirm={() => confirmMutation.mutate(c.id)}
+                  onDecline={() => declineMutation.mutate(c.id)}
+                />
+              ))}
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

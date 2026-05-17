@@ -83,21 +83,28 @@ export default function SusuJoin() {
     )
   }
 
-  if (!info || !info.accepting) {
+  if (!info) {
+    return (
+      <div className="min-h-screen bg-gray-950">
+        {headerEl}
+        <div className="mx-auto max-w-sm px-4 py-16 text-center">
+          <span className="text-4xl block mb-4">❓</span>
+          <h1 className="text-xl font-bold text-white mb-2">Group Not Found</h1>
+          <p className="text-sm text-gray-400">This Susu group could not be found.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!info.accepting) {
     return (
       <div className="min-h-screen bg-gray-950">
         {headerEl}
         <div className="mx-auto max-w-sm px-4 py-16 text-center">
           <span className="text-4xl block mb-4">🔒</span>
-          <h1 className="text-xl font-bold text-white mb-2">
-            {!info ? 'Group Not Found' : 'No Longer Accepting Members'}
-          </h1>
+          <h1 className="text-xl font-bold text-white mb-2">No Longer Accepting Members</h1>
           <p className="text-sm text-gray-400">
-            {!info
-              ? 'This Susu group could not be found.'
-              : info.has_started
-                ? 'This susu has already started and is no longer accepting new members.'
-                : 'This susu is no longer accepting new members.'}
+            This savings circle is no longer accepting new join requests.
           </p>
         </div>
       </div>

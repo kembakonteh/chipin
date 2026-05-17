@@ -343,6 +343,27 @@ export default function ProfilePage() {
             Used for Susu WhatsApp standings reports. Include country code.
           </p>
         </div>
+
+        {/* Receive Money */}
+        <div style={{ borderTop: '1px solid #1f2937', marginTop: '16px', paddingTop: '16px' }}>
+          <button
+            type="button"
+            onClick={() => nav('/settings/payout')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            <span style={{ fontSize: '14px', color: '#e5e7eb', fontWeight: 500 }}>Receive Money · Payout methods</span>
+            <span style={{ fontSize: '14px', color: '#40916c' }}>→</span>
+          </button>
+        </div>
       </div>
 
       {/* Features section */}

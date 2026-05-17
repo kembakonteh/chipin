@@ -542,7 +542,7 @@ export default function SusuDetail() {
   const [rulesText, setRulesText] = useState('')
   // Payment settings
   const [editingPaymentSettings, setEditingPaymentSettings] = useState(false)
-  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true, accepting_members: true, payment_window_days: 5 })
+  const [paySettings, setPaySettings] = useState({ allow_card: true, allow_cashapp: false, allow_zelle: false, allow_cash: false, cashapp_handle: '', zelle_handle: '', recipient_must_pay: true, accepting_members: true, payment_window_days: 5 })
 
   const addMember = useMutation({
     mutationFn: () =>
@@ -626,6 +626,7 @@ export default function SusuDetail() {
       allow_card: paySettings.allow_card,
       allow_cashapp: paySettings.allow_cashapp,
       allow_zelle: paySettings.allow_zelle,
+      allow_cash: paySettings.allow_cash,
       cashapp_handle: paySettings.cashapp_handle.trim() || null,
       zelle_handle: paySettings.zelle_handle.trim() || null,
       recipient_must_pay: paySettings.recipient_must_pay,
@@ -679,6 +680,33 @@ export default function SusuDetail() {
       `View standings: ${window.location.origin}/s/${slug}/standings`,
     ].join('\n')
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  function handleSharePayLinks() {
+    if (!group) return
+    const cycle = group.current_cycle_detail
+    const exemptIds = new Set(cycle?.contributions.filter(c => c.is_exempt).map(c => c.member_id) ?? [])
+    const paidIds = new Set(cycle?.contributions.filter(c => c.paid).map(c => c.member_id) ?? [])
+    const unpaid = group.members.filter(m => !paidIds.has(m.id) && !exemptIds.has(m.id))
+    if (unpaid.length === 0) {
+      toast.success('Everyone has paid this cycle!')
+      return
+    }
+    const currentSummary = group.cycle_summaries.find(s => s.cycle_number === group.current_cycle)
+    const dueDate = currentSummary ? formatDate(currentSummary.due_date) : '—'
+    const origin = window.location.origin
+    const lines: string[] = []
+    lines.push(`💰 *${group.name} — Cycle ${group.current_cycle}*`)
+    lines.push('')
+    lines.push('Please make your contribution using your personal payment link below:')
+    lines.push('')
+    unpaid.forEach(m => {
+      lines.push(`${m.name}: ${origin}/s/${slug}/pay/${m.id}`)
+    })
+    lines.push('')
+    lines.push(`Contribution amount: ${fmt(parseFloat(group.contribution_amount))}`)
+    lines.push(`Due: ${dueDate}`)
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank')
   }
 
   const { data: joinRequests, refetch: refetchJoinRequests } = useQuery<SusuJoinRequest[]>({
@@ -779,23 +807,22 @@ export default function SusuDetail() {
         </div>
 
         {/* Action bar — always visible */}
-        <div className="flex items-center gap-2 flex-wrap border border-gray-800 rounded-xl px-4 py-3 bg-gray-900">
-          {group.status === 'active' && (
+        {group.status === 'active' && (
+          <div className="flex items-center gap-2 flex-wrap border border-gray-800 rounded-xl px-4 py-3 bg-gray-900">
             <button
               onClick={handleShareStandings}
-              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-600 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg bg-green-800 text-green-100 hover:bg-green-700 border border-green-700 transition-colors"
             >
-              📱 Share Standings
+              💬 Share Standings
             </button>
-          )}
-          <div className="flex-1" />
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="text-xs px-3 py-1.5 rounded-lg bg-red-900 text-red-200 hover:bg-red-800 border border-red-700 transition-colors"
-          >
-            🗑 Delete Group
-          </button>
-        </div>
+            <button
+              onClick={handleSharePayLinks}
+              className="text-xs px-3 py-1.5 rounded-lg bg-green-800 text-green-100 hover:bg-green-700 border border-green-700 transition-colors"
+            >
+              💬 Share Pay Links
+            </button>
+          </div>
+        )}
 
         {/* Start button for forming groups */}
         {group.status === 'forming' && (() => {
@@ -842,17 +869,27 @@ export default function SusuDetail() {
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => {
-                    const link = `${window.location.origin}/s/${slug}/join`
-                    navigator.clipboard.writeText(link)
-                      .then(() => toast.success('Join link copied!'))
-                      .catch(() => toast.error('Could not copy link'))
-                  }}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-sky-900/30 text-sky-300 hover:bg-sky-900/50 border border-sky-800/40 transition-colors"
-                >
-                  📋 Copy Join Link
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const link = `${window.location.origin}/s/${slug}/join`
+                      navigator.clipboard.writeText(link)
+                        .then(() => toast.success('Join link copied!'))
+                        .catch(() => toast.error('Could not copy link'))
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-sky-900/30 text-sky-300 hover:bg-sky-900/50 border border-sky-800/40 transition-colors"
+                  >
+                    📋 Copy Join Link
+                  </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`You've been invited to join *${group.name}* savings circle on ChipIn.\n\nFill out this short form to express your interest:\n${window.location.origin}/s/${slug}/join`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs px-3 py-1.5 rounded-lg bg-green-800 text-green-100 hover:bg-green-700 border border-green-700 transition-colors"
+                  >
+                    💬 Invite via WhatsApp
+                  </a>
+                </div>
               </div>
               {pendingRequests.length === 0 ? (
                 <div className="px-5 py-8 text-center text-sm text-gray-500">
@@ -874,16 +911,16 @@ export default function SusuDetail() {
                           <button
                             onClick={() => approveJoinRequest.mutate(r.id)}
                             disabled={approveJoinRequest.isPending || rejectJoinRequest.isPending}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-brand-700/40 text-brand-300 hover:bg-brand-700/70 border border-brand-700/50 transition-colors disabled:opacity-50"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-emerald-800 text-emerald-100 hover:bg-emerald-700 border border-emerald-700 transition-colors disabled:opacity-50"
                           >
-                            Approve
+                            ✓ Approve
                           </button>
                           <button
                             onClick={() => rejectJoinRequest.mutate(r.id)}
                             disabled={approveJoinRequest.isPending || rejectJoinRequest.isPending}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-800/40 transition-colors disabled:opacity-50"
+                            className="text-xs px-3 py-1.5 rounded-lg border border-red-800/60 text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-50"
                           >
-                            Decline
+                            ✗ Decline
                           </button>
                         </div>
                       </div>
@@ -1102,16 +1139,6 @@ export default function SusuDetail() {
                     {showAdd ? '✕ Cancel' : '＋ Add member'}
                   </button>
                 )}
-                {/* Feature 5: WhatsApp invite */}
-                <a
-                  href={`https://wa.me/?text=${encodeURIComponent(`Join our Susu group '${group.name}' on ChipIn! Pay your contribution online here: ${window.location.origin}/s/${slug}`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-900/30 text-emerald-300
-                    hover:bg-emerald-900/50 border border-emerald-800/40 transition-colors"
-                >
-                  Invite via WhatsApp
-                </a>
                 <button
                   onClick={() => navigate(`/s/${slug}`)}
                   className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
@@ -1294,6 +1321,7 @@ export default function SusuDetail() {
                       allow_card: group.allow_card,
                       allow_cashapp: group.allow_cashapp,
                       allow_zelle: group.allow_zelle,
+                      allow_cash: group.allow_cash,
                       cashapp_handle: group.cashapp_handle ?? '',
                       zelle_handle: group.zelle_handle ?? '',
                       recipient_must_pay: group.recipient_must_pay,
@@ -1316,6 +1344,7 @@ export default function SusuDetail() {
                     { key: 'allow_card' as const, label: 'Card (Stripe)', icon: '💳' },
                     { key: 'allow_cashapp' as const, label: 'CashApp', icon: '💚' },
                     { key: 'allow_zelle' as const, label: 'Zelle', icon: '🔵' },
+                    { key: 'allow_cash' as const, label: 'Cash', icon: '💵' },
                   ].map(m => (
                     <label key={m.key} className="flex items-center gap-3 cursor-pointer">
                       <input
@@ -1395,7 +1424,7 @@ export default function SusuDetail() {
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={() => savePaymentSettings.mutate()}
-                    disabled={savePaymentSettings.isPending || (!paySettings.allow_card && !paySettings.allow_cashapp && !paySettings.allow_zelle)}
+                    disabled={savePaymentSettings.isPending || (!paySettings.allow_card && !paySettings.allow_cashapp && !paySettings.allow_zelle && !paySettings.allow_cash)}
                     className="px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-500 disabled:opacity-50 transition-colors"
                   >
                     {savePaymentSettings.isPending ? 'Saving…' : 'Save'}
@@ -1422,6 +1451,11 @@ export default function SusuDetail() {
                   {group.allow_zelle && (
                     <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-800/40">
                       🔵 Zelle{group.zelle_handle ? ` · ${group.zelle_handle}` : ''}
+                    </span>
+                  )}
+                  {group.allow_cash && (
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-yellow-900/40 text-yellow-300 border border-yellow-800/40">
+                      💵 Cash
                     </span>
                   )}
                 </div>
@@ -1504,6 +1538,16 @@ export default function SusuDetail() {
             </p>
           </div>
         )}
+
+        {/* Danger zone */}
+        <div className="pt-2">
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-full text-sm px-4 py-2.5 rounded-xl border border-red-800/60 text-red-400 hover:bg-red-900/20 transition-colors"
+          >
+            Delete Group
+          </button>
+        </div>
       </div>
 
       {showPayoutModal && cycle && (

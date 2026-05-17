@@ -36,6 +36,7 @@ class ContributorUpdate(BaseModel):
     amount: Optional[Decimal] = None
     paid_via: Optional[PaidVia] = None
     is_anonymous: Optional[bool] = None
+    paid: Optional[bool] = None
 
 
 class MarkPaidRequest(BaseModel):

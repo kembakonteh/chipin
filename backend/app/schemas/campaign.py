@@ -69,6 +69,11 @@ class CampaignUpdate(BaseModel):
     collection_currency: Optional[CollectionCurrency] = None
     payout_currency: Optional[PayoutCurrency] = None
     org_id: Optional[uuid.UUID] = None
+    event_date: Optional[date] = None
+    event_time: Optional[str] = None
+    event_location: Optional[str] = None
+    event_rsvp: Optional[str] = None
+    party_color: Optional[str] = None
 
 
 class CampaignResponse(BaseModel):
@@ -94,8 +99,14 @@ class CampaignResponse(BaseModel):
     zelle_info: Optional[str]
     cashapp_handle: Optional[str]
     platform_fee_pct: Decimal
+    payout_enabled: bool
     org_id: Optional[uuid.UUID]
     org_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     beneficiary: Optional[BeneficiaryResponse] = None
+    event_date: Optional[date] = None
+    event_time: Optional[str] = None
+    event_location: Optional[str] = None
+    event_rsvp: Optional[str] = None
+    party_color: Optional[str] = None

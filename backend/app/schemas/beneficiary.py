@@ -14,4 +14,8 @@ class BeneficiaryResponse(BaseModel):
     photo_url: Optional[str]
     story: Optional[str]
     location: Optional[str]
+    party_name: Optional[str]
+    office_sought: Optional[str]
+    party_name: Optional[str]
+    office_sought: Optional[str]
     created_at: datetime

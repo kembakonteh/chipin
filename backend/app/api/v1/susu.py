@@ -249,6 +249,7 @@ async def create_susu_group(
         allow_card=body.allow_card,
         allow_cashapp=body.allow_cashapp,
         allow_zelle=body.allow_zelle,
+        allow_cash=body.allow_cash,
         cashapp_handle=body.cashapp_handle,
         zelle_handle=body.zelle_handle,
         recipient_must_pay=body.recipient_must_pay,
@@ -1288,7 +1289,7 @@ async def update_susu_settings(
         setattr(group, k, v)
 
     # Ensure at least one payment method is enabled
-    if not group.allow_card and not group.allow_cashapp and not group.allow_zelle:
+    if not group.allow_card and not group.allow_cashapp and not group.allow_zelle and not group.allow_cash:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one payment method must be enabled")
 
     await db.commit()
@@ -1373,6 +1374,7 @@ async def get_susu_pay_info(
         allow_card=group.allow_card,
         allow_cashapp=group.allow_cashapp,
         allow_zelle=group.allow_zelle,
+        allow_cash=group.allow_cash,
         cashapp_handle=group.cashapp_handle,
         zelle_handle=group.zelle_handle,
         is_split=member.is_split,
@@ -1504,6 +1506,8 @@ async def susu_member_offline_pay(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CashApp payments are not enabled for this group")
     if body.paid_via == SusuPaidVia.zelle and not group.allow_zelle:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Zelle payments are not enabled for this group")
+    if body.paid_via == SusuPaidVia.cash and not group.allow_cash:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cash payments are not enabled for this group")
 
     member_result = await db.execute(
         select(SusuMember).where(SusuMember.id == member_id, SusuMember.group_id == group.id)

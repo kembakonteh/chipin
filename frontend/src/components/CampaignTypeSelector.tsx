@@ -9,7 +9,8 @@ export const CAMPAIGN_TYPES: {
   { value: 'general',     emoji: '⚽', label: 'General',     desc: 'Soccer, trips, group events' },
   { value: 'memorial',    emoji: '🕊',  label: 'Memorial',    desc: 'Funeral, repatriation, bereavement' },
   { value: 'charity',     emoji: '❤️',  label: 'Charity',     desc: 'Community support, donations' },
-  { value: 'celebration', emoji: '🎉', label: 'Celebration', desc: 'Weddings, graduations, showers' },
+  { value: 'celebration', emoji: '🎉', label: 'Celebration',          desc: 'Weddings, graduations, showers' },
+  { value: 'political',   emoji: '🗳️', label: 'Political / Party Fund', desc: 'Fundraise for a political party, candidate, or civic cause' },
 ]
 
 interface Props {

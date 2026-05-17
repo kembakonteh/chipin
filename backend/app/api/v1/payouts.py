@@ -8,6 +8,7 @@ Payout endpoints:
 """
 import secrets
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List
 
@@ -297,3 +298,52 @@ async def list_payouts(
         .order_by(Payout.initiated_at.desc())
     )
     return payouts_result.scalars().all()
+
+
+# ── PATCH /campaigns/{slug}/payout-enabled ────────────────────────────────────
+
+@campaigns_router.patch("/{slug}/payout-enabled")
+async def toggle_payout_enabled(
+    slug: str,
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Campaign).where(Campaign.slug == slug, Campaign.owner_id == current_user.id)
+    )
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    campaign.payout_enabled = bool(body.get("payout_enabled", True))
+    await db.commit()
+    return {"payout_enabled": campaign.payout_enabled}
+
+
+# ── POST /campaigns/{slug}/payouts/{payout_id}/mark-sent ─────────────────────
+
+@campaigns_router.post("/{slug}/payouts/{payout_id}/mark-sent")
+async def mark_payout_sent(
+    slug: str,
+    payout_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Campaign).where(Campaign.slug == slug, Campaign.owner_id == current_user.id)
+    )
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    payout_result = await db.execute(
+        select(Payout).where(Payout.id == payout_id, Payout.campaign_id == campaign.id)
+    )
+    payout = payout_result.scalar_one_or_none()
+    if not payout:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payout not found")
+
+    payout.status = PayoutStatus.completed
+    payout.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"id": str(payout.id), "status": payout.status}

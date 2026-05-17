@@ -16,6 +16,7 @@ from app.models.susu import (
     SusuStatus,
 )
 from app.models.payout import MethodType, Payout, PayoutMethod, PayoutStatus
+from app.models.purchase import Purchase
 from app.models.template import CampaignTemplate
 from app.models.user import User
 from app.models.user_features import UserFeatures
@@ -43,6 +44,7 @@ __all__ = [
     "PaymentStatus",
     "CampaignTemplate",
     "Beneficiary",
+    "Purchase",
     "RecurringSchedule",
     "RecurringInstance",
     "Frequency",

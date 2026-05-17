@@ -113,6 +113,7 @@ class SusuGroup(Base, UUIDMixin):
     allow_card: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     allow_cashapp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     allow_zelle: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    allow_cash: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     cashapp_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     zelle_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Recipient exemption policy

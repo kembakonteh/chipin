@@ -31,6 +31,7 @@ from app.schemas.public import (
     ManualPayRequest,
     PublicCampaignResponse,
     PublicContributorItem,
+    RsvpRequest,
 )
 
 router = APIRouter(tags=["public"])
@@ -169,6 +170,11 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         zelle_info=campaign.zelle_info,
         cashapp_handle=campaign.cashapp_handle,
         beneficiary=campaign.beneficiary,
+        event_date=campaign.event_date,
+        event_time=campaign.event_time,
+        event_location=campaign.event_location,
+        event_rsvp=campaign.event_rsvp,
+        party_color=campaign.party_color,
     )
 
 
@@ -432,6 +438,63 @@ async def manual_pay(
     return JoinCampaignResponse(
         contributor_id=contributor.id,
         message="Thanks! The organizer will confirm your payment shortly.",
+    )
+
+
+@router.post("/p/{slug}/rsvp", response_model=JoinCampaignResponse, status_code=status.HTTP_201_CREATED)
+async def rsvp(
+    slug: str,
+    body: RsvpRequest,
+    db: AsyncSession = Depends(get_db),
+    arq=Depends(get_arq),
+):
+    """Guest self-RSVPs to an invitation-only celebration campaign."""
+    result = await db.execute(select(Campaign).where(Campaign.slug == slug))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    if campaign.status != CampaignStatus.active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This event is no longer accepting RSVPs.")
+
+    # Duplicate check by phone (if provided)
+    if body.phone:
+        dup_result = await db.execute(
+            select(Contributor).where(
+                Contributor.campaign_id == campaign.id,
+                Contributor.phone == body.phone,
+            )
+        )
+        if dup_result.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You're already on the guest list!")
+
+    contributor = Contributor(
+        campaign_id=campaign.id,
+        name=body.name,
+        phone=body.phone,
+        email=body.email,
+        amount=0,
+        paid=False,
+        added_by_organizer=False,
+        is_anonymous=False,
+        payment_note=body.note,
+    )
+    db.add(contributor)
+    await db.commit()
+    await db.refresh(contributor)
+
+    owner_result = await db.execute(select(User).where(User.id == campaign.owner_id))
+    owner = owner_result.scalar_one_or_none()
+    if owner and owner.phone and campaign.whatsapp_reminders_enabled:
+        await arq.enqueue_job(
+            "notify_organizer_whatsapp",
+            organizer_phone=owner.phone,
+            message=f"{body.name} just RSVPd to {campaign.title}!",
+        )
+
+    return JoinCampaignResponse(
+        contributor_id=contributor.id,
+        message="You're on the guest list!",
     )
 
 

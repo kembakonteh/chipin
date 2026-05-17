@@ -92,6 +92,7 @@ export interface SusuGroup {
   allow_card: boolean
   allow_cashapp: boolean
   allow_zelle: boolean
+  allow_cash: boolean
   cashapp_handle: string | null
   zelle_handle: string | null
   recipient_must_pay: boolean
@@ -113,6 +114,7 @@ export interface SusuPayPageInfo {
   allow_card: boolean
   allow_cashapp: boolean
   allow_zelle: boolean
+  allow_cash: boolean
   cashapp_handle: string | null
   zelle_handle: string | null
   is_split: boolean
@@ -186,7 +188,7 @@ export type PayoutCurrency = 'USD' | 'GBP' | 'EUR' | 'GMD' | 'NGN' | 'GHS' | 'XO
 export type MethodType = 'mobile_money' | 'bank_transfer' | 'stripe_connect'
 export type PayoutStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
-export type CampaignType = 'general' | 'memorial' | 'charity' | 'celebration'
+export type CampaignType = 'general' | 'memorial' | 'charity' | 'celebration' | 'political'
 export type VisibilityMode = 'full_name' | 'first_name_only' | 'anonymous'
 export type CampaignStatus = 'active' | 'paused' | 'completed' | 'archived'
 export type PaidVia = 'card' | 'zelle' | 'cash' | 'cashapp' | 'manual'
@@ -219,9 +221,15 @@ export interface Campaign {
   platform_fee_pct: string
   org_id: string | null
   org_name: string | null
+  payout_enabled: boolean
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary | null
+  event_date: string | null
+  event_time: string | null
+  event_location: string | null
+  event_rsvp: string | null
+  party_color: string | null
 }
 
 export interface PayoutMethod {

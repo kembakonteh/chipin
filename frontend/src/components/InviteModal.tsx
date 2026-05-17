@@ -15,9 +15,18 @@ export default function InviteModal({ campaign, contributor, onClose, onSuccess 
   const isNew = !contributor
   const qc = useQueryClient()
 
-  const defaultMessage = contributor
-    ? `Hey ${contributor.name.split(' ')[0]}! I'm putting together a collection for ${campaign.title} and would love for you to chip in if you're able. No pressure — you can decline if you wish.`
-    : `I'm putting together a collection for ${campaign.title} and would love for you to chip in if you're able. No pressure — you can decline if you wish.`
+  const isCelebration = campaign.campaign_type === 'celebration'
+  const isMemorial = campaign.campaign_type === 'memorial'
+
+  const defaultMessage = isCelebration
+    ? contributor
+      ? `Hey ${contributor.name.split(' ')[0]}! You're invited to ${campaign.title}! We'd love to have you join us for this special occasion.`
+      : `You're invited to ${campaign.title}! We'd love to have you join us for this special occasion.`
+    : isMemorial
+      ? `We are heartbroken to share that we have lost a beloved member of our community. We are humbly reaching out for support to help bring them home to rest. Any contribution, no matter the size, is deeply appreciated.`
+      : contributor
+        ? `Hey ${contributor.name.split(' ')[0]}! I'm putting together a collection for ${campaign.title} and would love for you to chip in if you're able. No pressure — you can decline if you wish.`
+        : `I'm putting together a collection for ${campaign.title} and would love for you to chip in if you're able. No pressure — you can decline if you wish.`
 
   const [name, setName] = useState(contributor?.name ?? '')
   const [phone, setPhone] = useState(contributor?.phone ?? '')
@@ -49,9 +58,8 @@ export default function InviteModal({ campaign, contributor, onClose, onSuccess 
       onSuccess(c)
       onClose()
     },
-    onError: (err: any) => {
-      const detail = err?.response?.data?.detail
-      toast.error(detail ?? 'Failed to send invite. Check the phone number and try again.')
+    onError: () => {
+      toast.error("WhatsApp invite couldn't be sent automatically. You can share the event link manually instead.")
     },
   })
 
@@ -75,7 +83,11 @@ export default function InviteModal({ campaign, contributor, onClose, onSuccess 
               {isNew ? '＋ Invite Someone New' : contributor!.status === 'invited' ? 'Re-invite' : 'Send Invite'}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Sends a personal WhatsApp message with payment link
+              {isCelebration
+                ? 'Sends a personal WhatsApp invitation'
+                : isMemorial
+                  ? 'Sends a personal WhatsApp message requesting support'
+                  : 'Sends a personal WhatsApp message with payment link'}
             </p>
           </div>
           <button

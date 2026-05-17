@@ -5,7 +5,9 @@ import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import type { Campaign, CampaignType, Contributor, Frequency, Org, RecurringSchedule, VisibilityMode, CampaignStatus } from '../../types'
 import { deadlineInfo } from '../../types'
-import CampaignTypeSelector from '../../components/CampaignTypeSelector'
+import { CAMPAIGN_TYPES } from '../../components/CampaignTypeSelector'
+
+const PARTY_COLOR_PRESETS = ['#FF0000', '#0000FF', '#008000', '#FFD700', '#800080', '#FF6600', '#FFFFFF', '#000000']
 
 interface Form {
   emoji: string
@@ -23,6 +25,11 @@ interface Form {
   zelle_info: string
   cashapp_handle: string
   org_id: string | null
+  event_date: string
+  event_time: string
+  event_location: string
+  event_rsvp: string
+  party_color: string
 }
 
 function toForm(c: Campaign): Form {
@@ -42,6 +49,11 @@ function toForm(c: Campaign): Form {
     zelle_info: c.zelle_info ?? '',
     cashapp_handle: c.cashapp_handle ?? '',
     org_id: c.org_id ?? null,
+    event_date: c.event_date ?? '',
+    event_time: c.event_time ?? '',
+    event_location: c.event_location ?? '',
+    event_rsvp: c.event_rsvp ?? '',
+    party_color: c.party_color ?? '',
   }
 }
 
@@ -84,6 +96,11 @@ export default function SettingsTab({ campaign, contributors }: Props) {
         zelle_info: form.zelle_info.trim() || null,
         cashapp_handle: form.cashapp_handle.trim() || null,
         org_id: form.org_id || null,
+        event_date: form.event_date || null,
+        event_time: form.event_time.trim() || null,
+        event_location: form.event_location.trim() || null,
+        event_rsvp: form.event_rsvp.trim() || null,
+        party_color: form.party_color.trim() || null,
       }).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['campaign', campaign.slug] })
@@ -150,24 +167,38 @@ export default function SettingsTab({ campaign, contributors }: Props) {
         </div>
 
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Description</label>
+          <label className="block text-xs text-gray-400 mb-1">
+            {form.campaign_type === 'charity'
+              ? 'What is this collection for?'
+              : form.campaign_type === 'political'
+                ? 'What is this campaign for?'
+                : 'Description'}
+          </label>
           <textarea
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
-            rows={2}
+            rows={form.campaign_type === 'charity' || form.campaign_type === 'political' ? 6 : 2}
             placeholder={
-              form.has_goal
-                ? 'Optional details about this campaign…'
-                : 'e.g. Members can contribute any amount they wish. Every bit helps!'
+              form.campaign_type === 'charity'
+                ? "Tell people what this collection is for — e.g. 'We are raising funds to renovate the masjid prayer hall and install new AC units. All contributions go directly toward construction costs.'"
+                : form.campaign_type === 'political'
+                  ? "Tell supporters what this political campaign or party fund is raising money for — e.g. 'We are raising funds to support our candidate's grassroots campaign for the upcoming regional elections.'"
+                  : form.has_goal
+                    ? 'Optional details about this campaign…'
+                    : 'e.g. Members can contribute any amount they wish. Every bit helps!'
             }
             className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
               text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none resize-none"
           />
-          {!form.has_goal && !form.description && (
+          {form.campaign_type === 'charity' || form.campaign_type === 'political' ? (
+            <p className="text-xs text-gray-500 mt-1">
+              This message will be shown prominently on your public campaign page.
+            </p>
+          ) : !form.has_goal && !form.description ? (
             <p className="text-xs text-gray-500 mt-1">
               Tip: let contributors know what's expected — a minimum, a suggested amount, or just encourage them to give what they can.
             </p>
-          )}
+          ) : null}
         </div>
 
         <div>
@@ -237,8 +268,103 @@ export default function SettingsTab({ campaign, contributors }: Props) {
 
         <div>
           <label className="block text-xs text-gray-400 mb-2">Campaign type</label>
-          <CampaignTypeSelector value={form.campaign_type} onChange={(v) => set('campaign_type', v)} />
+          {(() => {
+            const t = CAMPAIGN_TYPES.find(x => x.value === campaign.campaign_type)!
+            return (
+              <div className="flex items-start gap-2 rounded-lg border border-gray-700 bg-gray-800/60 p-3">
+                <span className="text-2xl leading-none mt-0.5">{t.emoji}</span>
+                <span>
+                  <span className="block text-sm font-semibold text-white">{t.label}</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">{t.desc}</span>
+                </span>
+              </div>
+            )
+          })()}
+          <p className="text-xs text-gray-600 mt-1.5">Campaign type cannot be changed after creation.</p>
         </div>
+
+        {campaign.campaign_type === 'political' && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-2">Party Color</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {PARTY_COLOR_PRESETS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => set('party_color', c)}
+                  className="h-8 w-8 rounded-full border-2 transition-all hover:scale-110"
+                  style={{
+                    backgroundColor: c,
+                    borderColor: form.party_color === c ? 'white' : 'transparent',
+                    outline: form.party_color === c ? '2px solid #6b7280' : 'none',
+                    outlineOffset: '2px',
+                    boxShadow: c === '#FFFFFF' ? '0 0 0 1px #4b5563' : undefined,
+                  }}
+                />
+              ))}
+              <input
+                type="color"
+                value={form.party_color || '#16a34a'}
+                onChange={e => set('party_color', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer border border-gray-600 bg-transparent p-0.5"
+                title="Custom color"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1.5">Styles your public campaign page with your party's colors</p>
+          </div>
+        )}
+
+        {form.campaign_type === 'celebration' && (
+          <div className="space-y-3 pt-1 border-t border-gray-800">
+            <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider pt-1">Event Details</h4>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Event date <span className="text-gray-600">(optional)</span></label>
+              <input
+                type="date"
+                value={form.event_date}
+                onChange={e => set('event_date', e.target.value)}
+                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Event time <span className="text-gray-600">(optional, e.g. 12 PM – 8 PM)</span></label>
+              <input
+                type="text"
+                value={form.event_time}
+                onChange={e => set('event_time', e.target.value)}
+                placeholder="e.g. 12 PM – 8 PM"
+                maxLength={50}
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Event location <span className="text-gray-600">(optional)</span></label>
+              <input
+                type="text"
+                value={form.event_location}
+                onChange={e => set('event_location', e.target.value)}
+                placeholder="e.g. 123 Main St, Atlanta, GA"
+                maxLength={500}
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">RSVP contact <span className="text-gray-600">(optional, phone or email)</span></label>
+              <input
+                type="text"
+                value={form.event_rsvp}
+                onChange={e => set('event_rsvp', e.target.value)}
+                placeholder="e.g. +1 555-0100 or rsvp@example.com"
+                maxLength={255}
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3">
           <label className="flex items-center gap-3 cursor-pointer">

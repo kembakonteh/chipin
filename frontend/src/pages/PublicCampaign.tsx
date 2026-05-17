@@ -46,6 +46,11 @@ interface PublicCampaign {
   zelle_info: string | null
   cashapp_handle: string | null
   beneficiary: PublicBeneficiary | null
+  event_date: string | null
+  event_time: string | null
+  event_location: string | null
+  event_rsvp: string | null
+  party_color: string | null
 }
 
 interface LiveStats {
@@ -65,6 +70,7 @@ const BOARD_TITLE: Record<CampaignType, string> = {
   memorial:    'Contributors',
   charity:     'Supporters',
   celebration: "Who's Celebrating 🎉",
+  political:   'Campaign Supporters 🗳️',
 }
 
 function timeAgo(iso: string): string {
@@ -186,13 +192,21 @@ export default function PublicCampaign() {
   const [manualMethod, setManualMethod] = useState<null | 'zelle' | 'cashapp'>(null)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
+  const [email] = useState('')
   const [amount, setAmount] = useState(campaign?.amount_per_person ?? '')
-  const [message, setMessage] = useState('')
   const [isAnon, setIsAnon] = useState(false)
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState('')
   const [manualSent, setManualSent] = useState(false)
+
+  // RSVP flow (invitation-only celebrations)
+  const [rsvpName, setRsvpName] = useState('')
+  const [rsvpPhone, setRsvpPhone] = useState('')
+  const [rsvpEmail, setRsvpEmail] = useState('')
+  const [rsvpMessage, setRsvpMessage] = useState('')
+  const [rsvpSubmitting, setRsvpSubmitting] = useState(false)
+  const [rsvpDone, setRsvpDone] = useState(false)
+  const [rsvpError, setRsvpError] = useState('')
 
   useEffect(() => {
     if (!campaign) return
@@ -200,35 +214,6 @@ export default function PublicCampaign() {
     const defaultAnon = campaign.campaign_type === 'memorial' || campaign.campaign_type === 'charity'
     setIsAnon(defaultAnon)
   }, [campaign?.campaign_type, campaign?.amount_per_person])
-
-  async function handlePay(e: React.FormEvent) {
-    e.preventDefault()
-    if (!campaign || !name.trim() || !email.trim()) return
-    const parsed = parseFloat(amount)
-    if (!amount || isNaN(parsed) || parsed <= 0) {
-      setPayError('Enter a valid amount.')
-      return
-    }
-    setPayError('')
-    setPaying(true)
-    try {
-      const res = await http.post<{ checkout_url: string }>(`/p/${slug}/pay`, {
-        contributor_name: name.trim(),
-        contributor_email: email.trim(),
-        amount: parsed,
-        is_anonymous: isAnon,
-        message: message.trim() || null,
-      })
-      window.location.href = res.data.checkout_url
-    } catch (err: unknown) {
-      const msg =
-        axios.isAxiosError(err)
-          ? (err.response?.data as { detail?: string })?.detail ?? 'Payment failed.'
-          : 'Payment failed.'
-      setPayError(msg)
-      setPaying(false)
-    }
-  }
 
   // Page title
   useEffect(() => {
@@ -263,6 +248,13 @@ export default function PublicCampaign() {
     if (a.paid === b.paid) return 0
     return a.paid ? -1 : 1
   })
+
+  // Invitation-only: celebration with no contribution amount and no goal
+  const isInvitationOnly = campaign.campaign_type === 'celebration' &&
+    campaign.goal_amount == null &&
+    parseFloat(campaign.amount_per_person ?? '0') === 0
+
+  const showPaySection = !isInvitationOnly
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -324,98 +316,197 @@ export default function PublicCampaign() {
         </div>
       )}
 
-      {/* ── Hero (green gradient) ── */}
-      <div className="bg-gradient-to-b from-brand-700 via-brand-600 to-brand-500 px-4 pb-8 pt-10 text-white">
-
-        {/* Emoji + title */}
-        <div className="text-center mb-6">
-          <span className="text-6xl block mb-3">{campaign.emoji}</span>
-          <h1 className="text-2xl font-bold leading-tight">{campaign.title}</h1>
-          {campaign.description && (
-            <p className="mt-2 text-brand-100 text-sm leading-relaxed max-w-xs mx-auto">
-              {campaign.description}
-            </p>
+      {/* ── Hero ── */}
+      {campaign.campaign_type === 'celebration' ? (
+        <>
+          <CelebrationHero campaign={campaign} />
+          {campaign.campaign_type === 'celebration' && isActive && (
+            <div className="px-4 py-6 bg-gray-950 border-b border-gray-800">
+              {rsvpDone ? (
+                <div className="text-center space-y-2 py-4">
+                  <span className="text-4xl block">🎉</span>
+                  <p className="font-semibold text-white">You're on the guest list!</p>
+                  <p className="text-sm text-gray-400">The host will be in touch.</p>
+                </div>
+              ) : (
+                <form className="space-y-3 max-w-sm mx-auto" onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (!rsvpName.trim()) { setRsvpError('Name is required.'); return }
+                  setRsvpError('')
+                  setRsvpSubmitting(true)
+                  try {
+                    await http.post(`/p/${slug}/rsvp`, {
+                      name: rsvpName.trim(),
+                      phone: rsvpPhone.trim() || null,
+                      email: rsvpEmail.trim() || null,
+                      note: rsvpMessage.trim() || null,
+                    })
+                    setRsvpDone(true)
+                  } catch (err: unknown) {
+                    const msg = axios.isAxiosError(err)
+                      ? (err.response?.data as { detail?: string })?.detail ?? 'Could not submit. Please try again.'
+                      : 'Could not submit. Please try again.'
+                    setRsvpError(msg)
+                  } finally {
+                    setRsvpSubmitting(false)
+                  }
+                }}>
+                  <p className="text-center text-sm font-semibold text-white mb-3">RSVP</p>
+                  <input
+                    required
+                    placeholder="Your name *"
+                    value={rsvpName}
+                    onChange={e => setRsvpName(e.target.value)}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                  />
+                  <input
+                    placeholder="Phone (optional)"
+                    value={rsvpPhone}
+                    onChange={e => setRsvpPhone(e.target.value)}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                  />
+                  <input
+                    placeholder="Email (optional)"
+                    value={rsvpEmail}
+                    onChange={e => setRsvpEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                  />
+                  <textarea
+                    placeholder="Anything you'd like to say? (optional)"
+                    value={rsvpMessage}
+                    onChange={e => setRsvpMessage(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none resize-none"
+                  />
+                  {rsvpError && <p className="text-xs text-red-400">{rsvpError}</p>}
+                  <button
+                    type="submit"
+                    disabled={rsvpSubmitting}
+                    className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                  >
+                    {rsvpSubmitting ? 'Submitting…' : '✓ Count me in!'}
+                  </button>
+                </form>
+              )}
+            </div>
           )}
-        </div>
+        </>
+      ) : campaign.campaign_type === 'political' ? (
+        <PoliticalHero
+          campaign={campaign}
+          totalRaised={totalRaised}
+          goalAmount={goalAmount}
+          animProgress={animProgress}
+          paidCount={paidCount}
+        />
+      ) : (
+        <>
+          <div className="bg-gradient-to-b from-brand-700 via-brand-600 to-brand-500 px-4 pb-8 pt-10 text-white">
 
-        {/* Progress ring + raised */}
-        <div className="flex flex-col items-center mb-6">
-          {goalAmount != null && (
-            <ProgressRing
-              percent={animProgress}
-              size={160}
-              strokeWidth={14}
-              color="white"
-              trackColor="rgba(255,255,255,0.2)"
+            {/* Emoji + title */}
+            <div className="text-center mb-6">
+              <span className="text-6xl block mb-3">{campaign.emoji}</span>
+              <h1 className="text-2xl font-bold leading-tight">{campaign.title}</h1>
+              {campaign.description && campaign.campaign_type !== 'charity' && (
+                <p className="mt-2 text-brand-100 text-sm leading-relaxed max-w-xs mx-auto">
+                  {campaign.description}
+                </p>
+              )}
+            </div>
+
+            {/* Progress ring + raised */}
+            <div className="flex flex-col items-center mb-6">
+              {goalAmount != null && (
+                <ProgressRing
+                  percent={animProgress}
+                  size={160}
+                  strokeWidth={14}
+                  color="white"
+                  trackColor="rgba(255,255,255,0.2)"
+                />
+              )}
+              <p className="mt-4 text-4xl font-bold tabular-nums">
+                {fmt(totalRaised, campaign.currency)}
+              </p>
+              <p className="text-brand-100 text-sm mt-1">
+                {goalAmount != null
+                  ? <>of {fmt(goalAmount, campaign.currency)} goal</>
+                  : <>raised so far</>
+                }
+                {amountPer && (
+                  <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
+                )}
+              </p>
+              {goalAmount == null && campaign.contribution_note && (
+                <p className="text-brand-200 text-xs mt-1.5 italic max-w-xs mx-auto text-center leading-relaxed">
+                  {campaign.contribution_note}
+                </p>
+              )}
+              {/* Local-currency conversion line (e.g. ~GMD 42,000) */}
+              {(campaign as any).payout_currency && (campaign as any).goal_amount_local && (
+                <p className="text-brand-200 text-xs mt-0.5">
+                  ~{(campaign as any).payout_currency}{' '}
+                  {Number((campaign as any).goal_amount_local).toLocaleString()} goal
+                  {(campaign as any).total_raised_local && (
+                    <> · {(campaign as any).payout_currency}{' '}
+                    {Number((campaign as any).total_raised_local).toLocaleString()} raised</>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Deadline banner */}
+            {(() => {
+              const dl = deadlineInfo(campaign.due_date)
+              if (!dl.urgency || !isActive) return null
+              const styles = {
+                overdue:  'bg-red-500/20 border-red-400/30 text-red-200',
+                today:    'bg-red-500/20 border-red-400/30 text-red-200',
+                tomorrow: 'bg-yellow-500/20 border-yellow-400/30 text-yellow-200',
+                soon:     'bg-yellow-500/20 border-yellow-400/30 text-yellow-200',
+                upcoming: 'bg-white/10 border-white/20 text-brand-100',
+              }
+              const icons = { overdue: '⚠️', today: '🔴', tomorrow: '🟡', soon: '⏰', upcoming: '📅' }
+              return (
+                <div className={`mx-auto mb-4 max-w-xs rounded-xl border px-4 py-2 text-center text-sm font-medium ${styles[dl.urgency]}`}>
+                  {icons[dl.urgency]} {dl.label}
+                </div>
+              )
+            })()}
+
+            {/* Stat pills */}
+            <div className="flex justify-center gap-2 flex-wrap">
+              <Pill label="Paid" value={String(paidCount)} />
+              <Pill label="Pending" value={String(pendingCount)} />
+              {remaining != null && <Pill label="Remaining" value={fmt(remaining, campaign.currency)} />}
+            </div>
+          </div>
+
+          {/* ── Beneficiary section ── */}
+          {campaign.beneficiary && (
+            <BeneficiarySection
+              beneficiary={campaign.beneficiary}
+              campaignType={campaign.campaign_type}
             />
           )}
-          <p className="mt-4 text-4xl font-bold tabular-nums">
-            {fmt(totalRaised, campaign.currency)}
-          </p>
-          <p className="text-brand-100 text-sm mt-1">
-            {goalAmount != null
-              ? <>of {fmt(goalAmount, campaign.currency)} goal</>
-              : <>raised so far</>
-            }
-            {amountPer && (
-              <> · <span className="font-semibold">{fmt(amountPer, campaign.currency)}</span> per person</>
-            )}
-          </p>
-          {goalAmount == null && campaign.contribution_note && (
-            <p className="text-brand-200 text-xs mt-1.5 italic max-w-xs mx-auto text-center leading-relaxed">
-              {campaign.contribution_note}
-            </p>
-          )}
-          {/* Local-currency conversion line (e.g. ~GMD 42,000) */}
-          {(campaign as any).payout_currency && (campaign as any).goal_amount_local && (
-            <p className="text-brand-200 text-xs mt-0.5">
-              ~{(campaign as any).payout_currency}{' '}
-              {Number((campaign as any).goal_amount_local).toLocaleString()} goal
-              {(campaign as any).total_raised_local && (
-                <> · {(campaign as any).payout_currency}{' '}
-                {Number((campaign as any).total_raised_local).toLocaleString()} raised</>
-              )}
-            </p>
-          )}
+        </>
+      )}
+
+
+      {/* ── About This Collection / Campaign — charity & political public page ── */}
+      {(campaign.campaign_type === 'charity' || campaign.campaign_type === 'political') && campaign.description && (
+        <div className={`px-4 py-5 border-b ${campaign.campaign_type === 'political' ? 'bg-slate-800 border-slate-700' : 'bg-gray-950 border-gray-800'}`}>
+          <div className="border-l-4 border-brand-500 pl-4">
+            <h3 className="text-xs font-semibold text-brand-400 uppercase tracking-wider mb-2">
+              {campaign.campaign_type === 'political' ? 'About This Campaign' : 'About This Collection'}
+            </h3>
+            <p className="text-gray-200 text-base leading-relaxed">{campaign.description}</p>
+          </div>
         </div>
-
-        {/* Deadline banner */}
-        {(() => {
-          const dl = deadlineInfo(campaign.due_date)
-          if (!dl.urgency || !isActive) return null
-          const styles = {
-            overdue:  'bg-red-500/20 border-red-400/30 text-red-200',
-            today:    'bg-red-500/20 border-red-400/30 text-red-200',
-            tomorrow: 'bg-yellow-500/20 border-yellow-400/30 text-yellow-200',
-            soon:     'bg-yellow-500/20 border-yellow-400/30 text-yellow-200',
-            upcoming: 'bg-white/10 border-white/20 text-brand-100',
-          }
-          const icons = { overdue: '⚠️', today: '🔴', tomorrow: '🟡', soon: '⏰', upcoming: '📅' }
-          return (
-            <div className={`mx-auto mb-4 max-w-xs rounded-xl border px-4 py-2 text-center text-sm font-medium ${styles[dl.urgency]}`}>
-              {icons[dl.urgency]} {dl.label}
-            </div>
-          )
-        })()}
-
-        {/* Stat pills */}
-        <div className="flex justify-center gap-2 flex-wrap">
-          <Pill label="Paid" value={String(paidCount)} />
-          <Pill label="Pending" value={String(pendingCount)} />
-          {remaining != null && <Pill label="Remaining" value={fmt(remaining, campaign.currency)} />}
-        </div>
-      </div>
-
-      {/* ── Beneficiary section ── */}
-      {campaign.beneficiary && (
-        <BeneficiarySection
-          beneficiary={campaign.beneficiary}
-          campaignType={campaign.campaign_type}
-        />
       )}
 
       {/* ── Pay section ── */}
-      <div className="px-4 py-6 bg-white border-b border-gray-100">
+      {showPaySection && <div id="pay-section" className="px-4 py-6 bg-white border-b border-gray-100">
         {!isActive && (
           <div className="mb-4 rounded-xl bg-gray-100 px-4 py-3 text-center text-sm text-gray-500">
             This campaign is no longer accepting contributions.
@@ -426,7 +517,7 @@ export default function PublicCampaign() {
         {isActive && payMode === null && (
           <div className="space-y-3">
             <p className="text-center text-sm font-medium text-gray-600 mb-1">
-              How would you like to pay?
+              {campaign.campaign_type === 'political' ? 'Make Your Contribution' : 'How would you like to pay?'}
             </p>
             <button
               type="button"
@@ -457,127 +548,21 @@ export default function PublicCampaign() {
           </div>
         )}
 
-        {/* Step 2a: Card payment form */}
+        {/* Step 2a: Card payment — coming soon */}
         {isActive && payMode === 'card' && (
-          <form onSubmit={handlePay} className="space-y-3">
-            <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-amber-500 text-sm">⚠️</span>
-                <p className="text-xs text-amber-700 font-medium">Debit cards only — credit cards are not accepted.</p>
-              </div>
-              <p className="text-xs text-amber-600 pl-6">
-                A <span className="font-semibold">2.5% platform fee</span> is added to card payments.
-                {(() => {
-                  const parsed = parseFloat(amount)
-                  if (!amount || isNaN(parsed) || parsed <= 0) return null
-                  const fee = parsed * 0.025
-                  const total = parsed + fee
-                  return (
-                    <span className="text-amber-700 font-medium">
-                      {' '}You'll be charged <span className="font-bold">${total.toFixed(2)}</span> (${parsed.toFixed(2)} + ${fee.toFixed(2)} fee).
-                    </span>
-                  )
-                })()}
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-6 py-8 text-center">
+              <p className="text-2xl mb-3">🔒</p>
+              <p className="text-sm font-semibold text-gray-700">Card payments coming soon</p>
+              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                We're working on it. For now, please use Zelle or CashApp to contribute.
               </p>
             </div>
-
-            <input
-              required
-              type="text"
-              placeholder="Your full name *"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3
-                text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
-                focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-            <input
-              required
-              type="email"
-              placeholder="Email address *"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3
-                text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
-                focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
-                {campaign.currency === 'USD' ? '$' : campaign.currency}
-              </span>
-              <input
-                required
-                type="number"
-                min="1"
-                step="0.01"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder="Amount"
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-8 pr-4 py-3
-                  text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
-                  focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-
-            {campaign.allow_anonymous_contributions && (
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isAnon}
-                    onChange={e => setIsAnon(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600
-                      focus:ring-brand-500"
-                  />
-                  <span className="text-sm text-gray-700">Keep my name private on the public board</span>
-                </label>
-                {isAnon && (
-                  <p className="mt-2 ml-7 text-xs text-gray-500 leading-relaxed">
-                    Your contribution will show as{' '}
-                    <span className="font-medium text-gray-600">Anonymous</span>.
-                    The organizer will still know it's you.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Optional message */}
-            <div>
-              <textarea
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                maxLength={300}
-                rows={2}
-                placeholder={
-                  campaign.campaign_type === 'memorial'
-                    ? 'Leave a message of condolence (optional) — e.g. "May he rest in peace. Our thoughts are with the family."'
-                    : 'Leave a message (optional)'
-                }
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3
-                  text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500
-                  focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
-              />
-              {message.length > 0 && (
-                <p className="text-right text-xs text-gray-400 mt-0.5">{message.length}/300</p>
-              )}
-            </div>
-
-            {payError && <p className="text-sm text-red-500 text-center">{payError}</p>}
-
-            <button
-              type="submit"
-              disabled={paying}
-              className="w-full rounded-2xl bg-brand-600 py-4 text-base font-bold text-white
-                hover:bg-brand-500 active:scale-[0.98] disabled:opacity-60 transition-all
-                shadow-md shadow-brand-600/30"
-            >
-              {paying ? 'Redirecting to Stripe…' : 'Pay by Debit Card 💳'}
-            </button>
             <button type="button" onClick={() => setPayMode(null)}
               className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
               ← Back
             </button>
-          </form>
+          </div>
         )}
 
         {/* Step 2b: Zelle / CashApp */}
@@ -732,16 +717,21 @@ export default function PublicCampaign() {
 
         {payMode === null && (
           <p className="mt-3 text-center text-xs text-gray-400">
-            Card payments secured by Stripe · 2.5% platform fee applies
+            Card payments secured by Stripe
           </p>
         )}
-      </div>
+      </div>}
 
       {/* ── Board ── */}
       <div className="px-4 py-6">
-        <h2 className="text-base font-bold text-gray-800 mb-4">
-          {BOARD_TITLE[campaign.campaign_type] ?? 'Contributors'}
-        </h2>
+        <div className="flex items-baseline gap-2 mb-4">
+          <h2 className="text-base font-bold text-gray-800">
+            {BOARD_TITLE[campaign.campaign_type] ?? 'Contributors'}
+          </h2>
+          {campaign.campaign_type === 'political' && paidCount > 0 && (
+            <span className="text-sm font-semibold text-brand-600">{paidCount} and counting</span>
+          )}
+        </div>
 
         {sorted.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 py-10 text-center">
@@ -775,6 +765,109 @@ export default function PublicCampaign() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+// ── Celebration invitation hero ───────────────────────────────────────────────
+
+function CelebrationHero({ campaign }: { campaign: PublicCampaign }) {
+  const b = campaign.beneficiary
+
+  function fmtEventDate(iso: string): string {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    })
+  }
+
+  return (
+    <div className="bg-black px-4 pb-10 pt-10">
+      <div className="max-w-sm mx-auto">
+        {/* You are invited */}
+        <p className="text-center text-xs font-semibold tracking-[0.25em] uppercase text-yellow-400 mb-3">
+          You Are Invited To
+        </p>
+
+        {/* Event title */}
+        <h1 className="text-center text-3xl font-bold text-white leading-tight mb-6">
+          {campaign.title}
+        </h1>
+
+        {/* Beneficiary circle + ribbon */}
+        {b && (
+          <div className="flex flex-col items-center mb-6">
+            <div className="h-28 w-28 rounded-full overflow-hidden border-4 border-yellow-400 bg-gray-800 mb-3">
+              {b.photo_url ? (
+                <img src={b.photo_url} alt={b.display_name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-5xl">🎉</div>
+              )}
+            </div>
+            <div className="bg-yellow-400 rounded-full px-4 py-0.5 mb-2">
+              <span className="text-black text-xs font-bold uppercase tracking-widest">Celebrating {b.display_name}</span>
+            </div>
+            {b.location && (
+              <p className="text-yellow-300/70 text-xs mt-1">📍 {b.location}</p>
+            )}
+          </div>
+        )}
+
+        {/* Event details */}
+        {(campaign.event_date || campaign.event_time || campaign.event_location || campaign.event_rsvp) && (
+          <div className="border border-yellow-400/30 rounded-2xl px-5 py-4 space-y-3 mb-6 bg-white/5">
+            {campaign.event_date && (
+              <div className="flex items-start gap-3">
+                <span className="text-yellow-400 text-lg leading-none mt-0.5">📅</span>
+                <div>
+                  <p className="text-xs text-yellow-400/70 uppercase tracking-wider font-medium">Date</p>
+                  <p className="text-white text-sm">{fmtEventDate(campaign.event_date)}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_time && (
+              <div className="flex items-start gap-3">
+                <span className="text-yellow-400 text-lg leading-none mt-0.5">🕐</span>
+                <div>
+                  <p className="text-xs text-yellow-400/70 uppercase tracking-wider font-medium">Time</p>
+                  <p className="text-white text-sm">{campaign.event_time}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_location && (
+              <div className="flex items-start gap-3">
+                <span className="text-yellow-400 text-lg leading-none mt-0.5">📍</span>
+                <div>
+                  <p className="text-xs text-yellow-400/70 uppercase tracking-wider font-medium">Location</p>
+                  <p className="text-white text-sm">{campaign.event_location}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_rsvp && (
+              <div className="flex items-start gap-3">
+                <span className="text-yellow-400 text-lg leading-none mt-0.5">✉️</span>
+                <div>
+                  <p className="text-xs text-yellow-400/70 uppercase tracking-wider font-medium">RSVP</p>
+                  <p className="text-white text-sm">{campaign.event_rsvp}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Description */}
+        {campaign.description && (
+          <p className="text-center text-yellow-100/70 text-sm leading-relaxed mb-2">
+            {campaign.description}
+          </p>
+        )}
+
+        {/* Decorative divider */}
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px bg-yellow-400/20" />
+          <span className="text-yellow-400 text-lg">✦</span>
+          <div className="flex-1 h-px bg-yellow-400/20" />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Beneficiary section ───────────────────────────────────────────────────────
 
@@ -851,6 +944,149 @@ function Pill({ label, value }: { label: string; value: string }) {
   )
 }
 
+// ── Political hero ────────────────────────────────────────────────────────────
+
+function isLightColor(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return (r * 299 + g * 587 + b * 114) / 1000 > 155
+}
+
+function PoliticalHero({
+  campaign,
+  totalRaised,
+  goalAmount,
+  animProgress,
+  paidCount,
+}: {
+  campaign: PublicCampaign
+  totalRaised: number
+  goalAmount: number | null
+  animProgress: number
+  paidCount: number
+}) {
+  const b = campaign.beneficiary
+  const dl = deadlineInfo(campaign.due_date)
+  const remaining = goalAmount != null ? Math.max(0, goalAmount - totalRaised) : null
+  const pc = campaign.party_color ?? '#16a34a'
+  const pcText = isLightColor(pc) ? '#1e293b' : '#ffffff'
+
+  function scrollToPay() {
+    document.getElementById('pay-section')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  return (
+    <div
+      className="relative bg-slate-900 px-4 pb-10 pt-10 text-white overflow-hidden"
+      style={{ backgroundImage: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
+    >
+      {/* Subtle diagonal stripe overlay */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{ backgroundImage: 'repeating-linear-gradient(45deg, white 0px, white 1px, transparent 1px, transparent 14px)' }}
+      />
+      {/* Party color radial tint */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at top, ${pc}1a 0%, transparent 65%)` }}
+      />
+
+      <div className="relative max-w-sm mx-auto">
+        {/* Emoji */}
+        <p className="text-center text-5xl mb-5">{campaign.emoji}</p>
+
+        {/* Candidate / party section */}
+        {b && (
+          <div className="flex flex-col items-center mb-6">
+            <div
+              className="h-36 w-36 rounded-full overflow-hidden border-4 bg-slate-700 mb-3 shadow-lg"
+              style={{ borderColor: pc, boxShadow: `0 10px 25px ${pc}33` }}
+            >
+              {b.photo_url ? (
+                <img src={b.photo_url} alt={b.display_name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-5xl">🗳️</div>
+              )}
+            </div>
+            <h2 className="text-2xl font-bold text-white text-center leading-tight">{b.display_name}</h2>
+            {b.location && (
+              <p className="text-xs mt-1 text-center" style={{ color: pc + 'cc' }}>📍 {b.location}</p>
+            )}
+            {b.story && (
+              <p className="text-gray-300 text-sm mt-2 text-center leading-relaxed max-w-xs">
+                {b.story.length > 120 ? b.story.slice(0, 120) + '…' : b.story}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Campaign title */}
+        <h1 className={`font-bold text-white text-center leading-tight mb-6 ${b ? 'text-lg' : 'text-2xl'}`}>
+          {campaign.title}
+        </h1>
+
+        {/* Progress section */}
+        <div className="bg-slate-800/70 rounded-2xl p-5 mb-5 border border-slate-700/60">
+          <p className="text-3xl font-bold tabular-nums text-center" style={{ color: pc }}>
+            {fmt(totalRaised, campaign.currency)}
+          </p>
+          {goalAmount != null ? (
+            <>
+              <p className="text-gray-400 text-sm text-center mt-1">
+                of {fmt(goalAmount, campaign.currency)} goal
+              </p>
+              <div className="mt-4 h-3 w-full rounded-full bg-slate-700 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-out"
+                  style={{ width: `${Math.min(animProgress, 100)}%`, backgroundColor: pc }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 text-right mt-1">{Math.round(animProgress)}% funded</p>
+            </>
+          ) : (
+            <p className="text-gray-400 text-sm text-center mt-1">raised so far</p>
+          )}
+        </div>
+
+        {/* Stat pills */}
+        <div className="flex justify-center gap-2 flex-wrap mb-6">
+          <PoliticalPill label="Supporters" value={String(paidCount)} partyColor={pc} />
+          {dl.daysLeft != null && dl.daysLeft >= 0 && (
+            <PoliticalPill label="Days left" value={String(dl.daysLeft)} partyColor={pc} />
+          )}
+          {remaining != null && remaining > 0 && (
+            <PoliticalPill label="Remaining" value={fmt(remaining, campaign.currency)} partyColor={pc} />
+          )}
+        </div>
+
+        {/* CTA */}
+        <button
+          type="button"
+          onClick={scrollToPay}
+          className="w-full rounded-2xl py-4 text-base font-bold active:scale-[0.98] transition-all shadow-lg"
+          style={{ backgroundColor: pc, color: pcText, boxShadow: `0 10px 25px ${pc}4d` }}
+        >
+          Support This Campaign →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PoliticalPill({ label, value, partyColor }: { label: string; value: string; partyColor?: string }) {
+  const pc = partyColor ?? '#16a34a'
+  return (
+    <div
+      className="flex items-center gap-1.5 rounded-full bg-slate-700/60 px-3 py-1.5 border"
+      style={{ borderColor: pc + '50' }}
+    >
+      <span className="text-xs text-gray-400">{label}</span>
+      <span className="text-sm font-bold text-white">{value}</span>
+    </div>
+  )
+}
+
 function BoardRow({
   contributor: c,
   campaignType,
@@ -900,22 +1136,36 @@ function BoardRow({
 
       {/* Status + amount */}
       <div className="flex items-center gap-2 shrink-0">
-        {!hideMoney && (
-          <span className={`text-sm font-semibold tabular-nums
-            ${c.paid ? 'text-brand-600' : 'text-gray-300'}`}>
-            {fmt(parseFloat(c.amount), currency)}
-          </span>
-        )}
-        {c.paid ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full
-            bg-brand-100 text-brand-600 text-xs font-bold">
-            ✓
-          </span>
+        {campaignType === 'celebration' ? (
+          c.paid ? (
+            <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+              Attending
+            </span>
+          ) : (
+            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500">
+              Pending
+            </span>
+          )
         ) : (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full
-            border-2 border-dashed border-gray-300 text-gray-300 text-xs">
-            ○
-          </span>
+          <>
+            {!hideMoney && (
+              <span className={`text-sm font-semibold tabular-nums
+                ${c.paid ? 'text-brand-600' : 'text-gray-300'}`}>
+                {fmt(parseFloat(c.amount), currency)}
+              </span>
+            )}
+            {c.paid ? (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full
+                bg-brand-100 text-brand-600 text-xs font-bold">
+                ✓
+              </span>
+            ) : (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full
+                border-2 border-dashed border-gray-300 text-gray-300 text-xs">
+                ○
+              </span>
+            )}
+          </>
         )}
       </div>
     </div>

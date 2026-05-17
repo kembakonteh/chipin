@@ -150,13 +150,13 @@ _TEMPLATES = [
         "sort_order": 11,
         "is_active": True,
     },
-_TEMPLATES_PLACEHOLDER
+]
 
 
 async def seed_templates(db: AsyncSession) -> None:
     """Insert built-in templates, skipping any that already exist by name."""
     stmt = pg_insert(CampaignTemplate).values(_TEMPLATES).on_conflict_do_nothing(
-        index_elements=["name"_TEMPLATES_PLACEHOLDER
+        index_elements=["name"]
     )
     await db.execute(stmt)
     await db.commit()

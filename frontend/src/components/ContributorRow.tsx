@@ -18,9 +18,13 @@ interface Props {
   onMarkPaid?: (c: Contributor) => void
   onSendReminder?: (c: Contributor) => void
   onInvite?: (c: Contributor) => void
+  hideAmount?: boolean
+  showPhone?: boolean
+  onConfirm?: () => void
+  onDecline?: () => void
 }
 
-export default function ContributorRow({ contributor: c, onMarkPaid, onSendReminder, onInvite }: Props) {
+export default function ContributorRow({ contributor: c, onMarkPaid, onSendReminder, onInvite, hideAmount, showPhone, onConfirm, onDecline }: Props) {
   const isPaid = c.paid
   const isDeclined = c.status === 'declined'
   const isInvited = c.status === 'invited'
@@ -79,52 +83,97 @@ export default function ContributorRow({ contributor: c, onMarkPaid, onSendRemin
           <p className="text-xs text-gray-500 mt-0.5">{fmtTime(c.paid_at)}</p>
         )}
         {!isPaid && !isDeclined && (
-          <p className="text-xs text-gray-600 mt-0.5">{isInvited ? 'Awaiting payment' : 'Unpaid'}</p>
+          showPhone
+            ? c.phone && <p className="text-xs text-gray-500 mt-0.5">{c.phone}</p>
+            : <p className="text-xs text-gray-600 mt-0.5">{isInvited ? 'Awaiting payment' : 'Unpaid'}</p>
         )}
-        {isDeclined && (
+        {isDeclined && !showPhone && (
           <p className="text-xs text-gray-700 mt-0.5">Declined to contribute</p>
         )}
       </div>
 
       {/* Amount + badges + actions */}
       <div className="flex items-center gap-2 shrink-0">
-        <span className={`text-sm font-semibold tabular-nums ${isPaid ? 'text-brand-300' : 'text-gray-600'}`}>
-          {fmt(parseFloat(c.amount))}
-        </span>
-        {isPaid && c.paid_via && (
+        {!hideAmount && (
+          <span className={`text-sm font-semibold tabular-nums ${isPaid ? 'text-brand-300' : 'text-gray-600'}`}>
+            {fmt(parseFloat(c.amount))}
+          </span>
+        )}
+        {!hideAmount && isPaid && c.paid_via && (
           <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${VIA_COLORS[c.paid_via] ?? VIA_COLORS.manual}`}>
             {VIA_LABELS[c.paid_via] ?? c.paid_via}
           </span>
         )}
         {!isPaid && !isDeclined && (
           <>
-            {(showInviteBtn || showReInviteBtn) && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onInvite!(c) }}
-                className={`rounded border px-2.5 py-1 text-xs transition-colors
-                  ${isInvited
-                    ? 'border-sky-800/50 text-sky-400 hover:border-sky-600 hover:bg-sky-900/30'
-                    : 'border-gray-700 text-gray-400 hover:border-brand-600 hover:text-brand-300'
-                  }`}
-              >
-                {inviteBtnLabel}
-              </button>
-            )}
-            {!c.phone && onInvite && (
-              <span className="text-[10px] text-gray-600" title="Add a phone number to enable invites">
-                📵
-              </span>
-            )}
-            {onSendReminder && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onSendReminder(c) }}
-                className="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-400
-                  hover:border-brand-600 hover:text-brand-300 transition-colors"
-              >
-                Remind
-              </button>
+            {showPhone ? (
+              <>
+                {onConfirm && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onConfirm() }}
+                    className="rounded border border-green-700 bg-green-900/30 px-2.5 py-1 text-xs
+                      text-green-300 hover:bg-green-800/50 transition-colors"
+                  >
+                    Attending ✓
+                  </button>
+                )}
+                {onDecline && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDecline() }}
+                    className="rounded border border-red-900/60 px-2.5 py-1 text-xs text-red-400
+                      hover:border-red-700 hover:bg-red-900/20 transition-colors"
+                  >
+                    Decline
+                  </button>
+                )}
+                {c.phone ? (
+                  <a
+                    href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-400
+                      hover:border-green-700 hover:text-green-400 transition-colors"
+                  >
+                    📱
+                  </a>
+                ) : (
+                  <span className="text-[10px] text-gray-600" title="No phone number saved">📵</span>
+                )}
+              </>
+            ) : (
+              <>
+                {(showInviteBtn || showReInviteBtn) && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onInvite!(c) }}
+                    className={`rounded border px-2.5 py-1 text-xs transition-colors
+                      ${isInvited
+                        ? 'border-sky-800/50 text-sky-400 hover:border-sky-600 hover:bg-sky-900/30'
+                        : 'border-gray-700 text-gray-400 hover:border-brand-600 hover:text-brand-300'
+                      }`}
+                  >
+                    {inviteBtnLabel}
+                  </button>
+                )}
+                {!c.phone && onInvite && (
+                  <span className="text-[10px] text-gray-600" title="Add a phone number to enable invites">
+                    📵
+                  </span>
+                )}
+                {onSendReminder && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onSendReminder(c) }}
+                    className="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-400
+                      hover:border-brand-600 hover:text-brand-300 transition-colors"
+                  >
+                    Remind
+                  </button>
+                )}
+              </>
             )}
           </>
         )}

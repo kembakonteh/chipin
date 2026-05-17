@@ -1,10 +1,12 @@
 import asyncio
+import csv
+import io
 import math
 import uuid
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from slugify import slugify
 from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +17,7 @@ from app.core.database import get_db
 from app.core.deps import get_arq, get_current_user
 from app.core.r2 import upload_bytes
 from app.models.beneficiary import Beneficiary
+from app.models.purchase import Purchase
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.contributor import Contributor
 from app.models.org import Org, OrgMember
@@ -402,6 +405,8 @@ async def create_beneficiary(
     display_name: str = Form(...),
     story: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    party_name: Optional[str] = Form(None),
+    office_sought: Optional[str] = Form(None),
     photo: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -430,6 +435,8 @@ async def create_beneficiary(
         story=story,
         location=location,
         photo_url=photo_url,
+	party_name=party_name,
+        office_sought=office_sought,
     )
     db.add(beneficiary)
     await db.commit()
@@ -457,6 +464,8 @@ async def update_beneficiary(
     story: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     photo: Optional[UploadFile] = File(None),
+    party_name: Optional[str] = Form(None),
+    office_sought: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -476,6 +485,10 @@ async def update_beneficiary(
         beneficiary.story = story
     if location is not None:
         beneficiary.location = location
+    if party_name is not None:
+        beneficiary.party_name = party_name
+    if office_sought is not None:
+        beneficiary.office_sought = office_sought
 
     if photo and photo.size:
         content = await photo.read()
@@ -507,3 +520,139 @@ async def delete_beneficiary(
         )
     await db.delete(beneficiary)
     await db.commit()
+
+
+# --- Payout enabled toggle ---
+
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+
+
+class _PayoutEnabledUpdate(_BaseModel):
+    payout_enabled: bool
+
+
+@router.patch("/{slug}/payout-enabled", response_model=CampaignResponse)
+async def set_payout_enabled(
+    slug: str,
+    body: _PayoutEnabledUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    campaign.payout_enabled = body.payout_enabled
+    await db.commit()
+    result = await db.execute(
+        select(Campaign)
+        .where(Campaign.id == campaign.id)
+        .options(selectinload(Campaign.beneficiary), selectinload(Campaign.org))
+    )
+    return _campaign_resp(result.scalar_one())
+
+
+# --- Purchases ---
+
+
+class _PurchaseCreate(_BaseModel):
+    description: str
+    amount: float
+    note: Optional[str] = None
+
+
+def _purchase_dict(p: Purchase) -> dict:
+    return {
+        "id": str(p.id),
+        "description": p.description,
+        "amount": str(p.amount),
+        "note": p.note,
+        "purchased_at": p.created_at.isoformat(),
+    }
+
+
+@router.post("/{slug}/purchases", status_code=status.HTTP_201_CREATED)
+async def add_purchase(
+    slug: str,
+    body: _PurchaseCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    if body.amount <= 0:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Amount must be > 0")
+    purchase = Purchase(campaign_id=campaign.id, description=body.description, amount=body.amount, note=body.note)
+    db.add(purchase)
+    await db.commit()
+    await db.refresh(purchase)
+    return _purchase_dict(purchase)
+
+
+@router.get("/{slug}/purchases")
+async def list_purchases(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    result = await db.execute(
+        select(Purchase).where(Purchase.campaign_id == campaign.id).order_by(Purchase.created_at.desc())
+    )
+    return [_purchase_dict(p) for p in result.scalars().all()]
+
+
+@router.delete("/{slug}/purchases/{purchase_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_purchase(
+    slug: str,
+    purchase_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    result = await db.execute(
+        select(Purchase).where(Purchase.id == purchase_id, Purchase.campaign_id == campaign.id)
+    )
+    purchase = result.scalar_one_or_none()
+    if not purchase:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase not found")
+    await db.delete(purchase)
+    await db.commit()
+
+
+# --- Contributors CSV export ---
+
+@router.get("/{slug}/contributors/export")
+async def export_contributors_csv(
+    slug: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    campaign = await _get_campaign_or_404(slug, current_user.id, db)
+    result = await db.execute(
+        select(Contributor)
+        .where(Contributor.campaign_id == campaign.id)
+        .order_by(Contributor.created_at)
+    )
+    contributors = result.scalars().all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["name", "phone", "amount", "paid", "paid_via", "paid_at", "added_by_organizer", "note"])
+    total = 0
+    for c in contributors:
+        total += float(c.amount)
+        writer.writerow([
+            c.name,
+            c.phone or "",
+            f"${float(c.amount):.2f}",
+            "Yes" if c.paid else "No",
+            c.paid_via or "",
+            c.paid_at.isoformat() if c.paid_at else "",
+            "Yes" if c.added_by_organizer else "No",
+            c.payment_note or "",
+        ])
+    writer.writerow(["Total", "", f"${total:.2f}", "", "", "", "", ""])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{slug}-contributors.csv"'},
+    )

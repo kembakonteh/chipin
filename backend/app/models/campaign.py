@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.org import Org
     from app.models.payment import Payment
     from app.models.payout import Payout
+    from app.models.purchase import Purchase
     from app.models.user import User
     # noqa: keep imports
 
@@ -42,6 +43,7 @@ class CampaignType(str, enum.Enum):
     memorial = "memorial"        # funeral repatriation, bereavement collections
     charity = "charity"          # community support, anonymous donations
     celebration = "celebration"  # weddings, graduations, baby showers
+    political = "political"      # political party, candidate, or civic cause
 
 
 class VisibilityMode(str, enum.Enum):
@@ -105,6 +107,12 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     platform_fee_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, default=Decimal("2.50")
     )
+    payout_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    event_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    event_time: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    event_location: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    event_rsvp: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    party_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -120,3 +128,4 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     beneficiary: Mapped[Optional["Beneficiary"]] = relationship(
         "Beneficiary", back_populates="campaign", uselist=False
     )
+    purchases: Mapped[List["Purchase"]] = relationship("Purchase", back_populates="campaign")

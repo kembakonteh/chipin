@@ -65,6 +65,8 @@ export default function SusuStandings() {
     )
   }
 
+  const group = data
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="border-b border-gray-800 bg-gray-950/90 backdrop-blur sticky top-0 z-20">
@@ -82,12 +84,12 @@ export default function SusuStandings() {
       <main className="mx-auto max-w-xl px-4 py-8 space-y-6">
         <div className="text-center">
           <div className="text-4xl mb-3">📊</div>
-          <h1 className="text-2xl font-bold text-white">{data.name}</h1>
+          <h1 className="text-2xl font-bold text-white">{group.name}</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {FREQ_LABELS[data.frequency]} · {fmt(parseFloat(data.contribution_amount))}/member
+            {FREQ_LABELS[group.frequency]} · {fmt(parseFloat(group.contribution_amount))}/member
           </p>
           <p className="text-xs text-gray-600 mt-1">
-            Cycle {data.current_cycle} of {data.total_cycles}
+            Cycle {group.current_cycle} of {group.total_cycles}
           </p>
         </div>
 
@@ -97,13 +99,13 @@ export default function SusuStandings() {
             <p className="text-xs text-gray-500 mt-0.5">Ranked by total contributed</p>
           </div>
 
-          {data.members.length === 0 ? (
+          {group.members.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm text-gray-500">
               No members yet.
             </div>
           ) : (
             <div className="divide-y divide-gray-800">
-              {data.members.map((m, i) => (
+              {group.members.map((m, i) => (
                 <div key={m.id} className="flex items-center justify-between px-5 py-3.5">
                   <div className="flex items-center gap-3">
                     <span className={`text-sm font-bold w-6 text-center ${
@@ -123,7 +125,7 @@ export default function SusuStandings() {
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-500">
-                          {m.paid_cycles}/{data.current_cycle} paid
+                          {m.paid_cycles}/{group.current_cycle} paid
                         </span>
                         <ReliabilityBar pct={m.reliability_pct} />
                       </div>
@@ -136,9 +138,9 @@ export default function SusuStandings() {
                     {m.payout_position != null && (
                       <div className="text-xs text-gray-600">#{m.payout_position}</div>
                     )}
-                    {data.status === 'active' && m.current_cycle_is_exempt ? (
+                    {group.status === 'active' && m.current_cycle_is_exempt ? (
                       <span className="text-xs text-amber-400">🎁 Exempt (recipient)</span>
-                    ) : data.status === 'active' && m.is_split ? (
+                    ) : group.status === 'active' && m.is_split ? (
                       <div className="flex flex-col gap-1 items-end">
                         {m.current_cycle_primary_paid
                           ? <span className="text-xs text-emerald-500">✓ {m.name}</span>
@@ -150,7 +152,7 @@ export default function SusuStandings() {
                             : <span className="text-xs text-gray-500">— {m.split_partner_name}</span>
                         )}
                       </div>
-                    ) : data.status === 'active' ? (
+                    ) : group.status === 'active' ? (
                       m.current_cycle_primary_paid
                         ? <span className="text-xs text-emerald-500">✓ Paid</span>
                         : <span className="text-xs text-gray-500">Pending</span>
@@ -162,15 +164,15 @@ export default function SusuStandings() {
           )}
         </div>
 
-        {(data.cycle_summaries?.length ?? 0) > 0 && (
+        {(group.cycle_summaries?.length ?? 0) > 0 && (
           <div className="rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800">
               <h2 className="font-semibold text-white">Payout Schedule</h2>
               <p className="text-xs text-gray-500 mt-0.5">Who receives the pot each cycle</p>
             </div>
             <div className="divide-y divide-gray-800">
-              {(data.cycle_summaries ?? []).map(s => {
-                const isCurrent = s.cycle_number === data.current_cycle
+              {(group.cycle_summaries ?? []).map(s => {
+                const isCurrent = s.cycle_number === group.current_cycle
                 return (
                   <div key={s.id} className={`flex items-center justify-between px-5 py-3 ${isCurrent ? 'bg-brand-900/10' : ''}`}>
                     <div className="flex items-center gap-3">
@@ -204,3 +206,4 @@ export default function SusuStandings() {
     </div>
   )
 }
+// cache-bust: v2

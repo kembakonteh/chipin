@@ -49,6 +49,11 @@ class PublicCampaignResponse(BaseModel):
     zelle_info: Optional[str] = None
     cashapp_handle: Optional[str] = None
     beneficiary: Optional[BeneficiaryResponse] = None
+    event_date: Optional[date] = None
+    event_time: Optional[str] = None
+    event_location: Optional[str] = None
+    event_rsvp: Optional[str] = None
+    party_color: Optional[str] = None
 
 
 class ManualPayRequest(BaseModel):
@@ -58,3 +63,10 @@ class ManualPayRequest(BaseModel):
     amount: Decimal
     method: str  # "zelle" | "cashapp"
     is_anonymous: bool = False
+
+
+class RsvpRequest(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    note: Optional[str] = None

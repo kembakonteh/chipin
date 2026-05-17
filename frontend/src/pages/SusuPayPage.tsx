@@ -74,7 +74,7 @@ export default function SusuPayPage() {
   const isPartner = searchParams.get('partner') === '1'
   const partnerParam = isPartner ? '?partner=1' : ''
   const [state, setState] = useState<PageState>('info')
-  const [offlineMethod, setOfflineMethod] = useState<'cashapp' | 'zelle' | null>(null)
+  const [offlineMethod, setOfflineMethod] = useState<'cashapp' | 'zelle' | 'cash' | null>(null)
   const [confirmed, setConfirmed] = useState(false)
 
   const { data: info, isLoading } = useQuery<SusuPayPageInfo>({
@@ -94,7 +94,7 @@ export default function SusuPayPage() {
   })
 
   const offlinePay = useMutation({
-    mutationFn: (paid_via: 'cashapp' | 'zelle') =>
+    mutationFn: (paid_via: 'cashapp' | 'zelle' | 'cash') =>
       api.post(`/s/${slug}/pay/${member_id}/offline${partnerParam}`, { paid_via }).then(getData),
     onSuccess: () => setState('success'),
     onError: (err: any) => {
@@ -190,7 +190,7 @@ export default function SusuPayPage() {
   }
 
   if (state === 'pending_verification') {
-    const methodLabel = info.pending_paid_via === 'cashapp' ? 'CashApp' : info.pending_paid_via === 'zelle' ? 'Zelle' : 'offline'
+    const methodLabel = info.pending_paid_via === 'cashapp' ? 'CashApp' : info.pending_paid_via === 'zelle' ? 'Zelle' : info.pending_paid_via === 'cash' ? 'Cash' : 'offline'
     return (
       <div className="min-h-screen bg-gray-950">
         {headerEl}
@@ -211,7 +211,7 @@ export default function SusuPayPage() {
   }
 
   if (state === 'success') {
-    const methodLabel = offlineMethod === 'cashapp' ? 'CashApp' : 'Zelle'
+    const methodLabel = offlineMethod === 'cashapp' ? 'CashApp' : offlineMethod === 'zelle' ? 'Zelle' : 'Cash'
     return (
       <div className="min-h-screen bg-gray-950">
         {headerEl}
@@ -331,6 +331,25 @@ export default function SusuPayPage() {
                   className="w-full py-2.5 bg-indigo-700 text-white font-semibold text-sm rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors"
                 >
                   {offlinePay.isPending && offlineMethod === 'zelle' ? 'Submitting…' : 'I sent payment via Zelle'}
+                </button>
+              </div>
+            )}
+
+            {/* Cash */}
+            {info.allow_cash && (
+              <div className="rounded-xl border border-yellow-700 bg-yellow-950 p-4">
+                <div className="flex items-center mb-2">
+                  <span className="text-sm font-semibold text-yellow-300">💵 Cash</span>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">
+                  Hand <span className="text-white font-medium">{fmt(parseFloat(info.amount))}</span> in cash directly to the organiser, then tap the button below.
+                </p>
+                <button
+                  onClick={() => { setOfflineMethod('cash'); offlinePay.mutate('cash') }}
+                  disabled={offlinePay.isPending}
+                  className="w-full py-2.5 bg-yellow-700 text-white font-semibold text-sm rounded-lg hover:bg-yellow-600 disabled:opacity-50 transition-colors"
+                >
+                  {offlinePay.isPending && offlineMethod === 'cash' ? 'Submitting…' : 'I paid in Cash'}
                 </button>
               </div>
             )}

@@ -24,5 +24,7 @@ class Beneficiary(Base, UUIDMixin, TimestampMixin):
     photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     story: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    party_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    office_sought: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="beneficiary")
