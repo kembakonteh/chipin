@@ -105,7 +105,7 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
     zelle_info: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     cashapp_handle: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     platform_fee_pct: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), nullable=False, default=Decimal("2.50")
+        Numeric(5, 2), nullable=False, default=Decimal("2.00")
     )
     payout_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     event_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

@@ -74,6 +74,7 @@ const TITLE_PLACEHOLDERS: Record<string, string> = {
   'Graduation Celebration':    'e.g. Graduation Celebration for Fatou',
   'Naming Ceremony':           'e.g. Naming Ceremony for Baby Jallow',
   'Birthday Celebration':      'e.g. Birthday Celebration for Adama',
+  'Party Meeting':             'e.g. UDP Regional Party Meeting — Banjul',
 }
 const DEFAULT_TITLE_PLACEHOLDER = 'e.g. My Campaign'
 
@@ -97,6 +98,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   const [eventLocation, setEventLocation] = useState('')
   const [eventRsvp, setEventRsvp] = useState('')
   const [partyColor, setPartyColor] = useState('#FF0000')
+  const [selectedTemplateName, setSelectedTemplateName] = useState('')
   const [titlePlaceholder, setTitlePlaceholder] = useState(DEFAULT_TITLE_PLACEHOLDER)
   const qc = useQueryClient()
 
@@ -129,6 +131,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
       template_id: t.id,
       accept_contributions: true,
     }))
+    setSelectedTemplateName(t.name)
     setTitlePlaceholder(TITLE_PLACEHOLDERS[t.name] ?? DEFAULT_TITLE_PLACEHOLDER)
     setStep('details')
   }
@@ -175,7 +178,8 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
           // photo upload failed — campaign still created successfully
         }
       }
-      if (campaign.campaign_type === 'celebration' && (eventDate || eventTime || eventLocation || eventRsvp)) {
+      if ((campaign.campaign_type === 'celebration' || campaign.campaign_type === 'political') &&
+          (eventDate || eventTime || eventLocation || eventRsvp)) {
         try {
           const patch: Record<string, string> = {}
           if (eventDate)     patch.event_date     = eventDate
@@ -196,9 +200,23 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
           // party color failed — campaign still created successfully
         }
       }
+      if (campaign.campaign_type === 'political' && benForm.display_name.trim()) {
+        try {
+          const fd = new FormData()
+          fd.append('display_name', benForm.display_name.trim())
+          if (benForm.story) fd.append('story', benForm.story)
+          if (benForm.party_name) fd.append('party_name', benForm.party_name)
+          if (benForm.office_sought) fd.append('office_sought', benForm.office_sought)
+          if (benForm.photo) fd.append('photo', benForm.photo)
+          await api.post(`/campaigns/${campaign.slug}/beneficiary`, fd)
+          qc.invalidateQueries({ queryKey: ['beneficiary', campaign.slug] })
+        } catch {
+          // beneficiary creation failed — campaign still created successfully
+        }
+      }
       toast.success('Campaign created!')
-      setCreatedCampaign(campaign)
       if (campaign.campaign_type === 'memorial' || campaign.campaign_type === 'charity') {
+        setCreatedCampaign(campaign)
         setStep('beneficiary')
       } else {
         onCreated?.(campaign)
@@ -256,6 +274,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const needsBeneficiary = form.campaign_type === 'memorial' || form.campaign_type === 'charity'
+  const showEventFields = form.campaign_type === 'celebration' || selectedTemplateName === 'Party Meeting'
 
   return (
     <div
@@ -316,7 +335,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => { setTitlePlaceholder(DEFAULT_TITLE_PLACEHOLDER); setStep('details') }}
+              onClick={() => { setSelectedTemplateName(''); setTitlePlaceholder(DEFAULT_TITLE_PLACEHOLDER); setStep('details') }}
               className="w-full rounded-xl border border-dashed border-gray-700 py-3 text-sm
                 text-gray-400 hover:text-white hover:border-gray-500 transition-colors"
             >
@@ -358,6 +377,7 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
                   value={form.description}
                   onChange={e => setF('description', e.target.value)}
                   rows={2}
+                  maxLength={form.campaign_type === 'political' ? 5000 : undefined}
                   placeholder={
                     form.has_goal
                       ? 'Optional details about this campaign…'
@@ -425,8 +445,8 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
               </div>
             )}
 
-            {/* Event Details — celebration only */}
-            {form.campaign_type === 'celebration' && (
+            {/* Event Details — celebration + party meeting */}
+            {showEventFields && (
               <div className="space-y-3">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   Event Details <span className="font-normal normal-case text-gray-600">(optional)</span>
@@ -700,6 +720,81 @@ export default function NewCampaignModal({ onClose, onCreated }: Props) {
                     All active org members will be auto-imported as contributors.
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Candidate Profile — political only, not shown for party meetings */}
+            {form.campaign_type === 'political' && selectedTemplateName !== 'Party Meeting' && (
+              <div className="space-y-4 pt-2 border-t border-gray-800">
+                <div>
+                  <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider pt-1">Candidate Profile</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Optional — help supporters know who they're backing.</p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 shrink-0 rounded-full overflow-hidden bg-gray-800 border border-gray-700
+                    flex items-center justify-center">
+                    {photoPreview
+                      ? <img src={photoPreview} className="h-full w-full object-cover" alt="" />
+                      : <span className="text-2xl">🗳️</span>
+                    }
+                  </div>
+                  <div>
+                    <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border
+                      border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:border-brand-500
+                      hover:text-white transition-colors">
+                      <span>Upload photo</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                    </label>
+                    {benForm.photo && (
+                      <p className="text-xs text-gray-500 mt-1 truncate max-w-[140px]">{benForm.photo.name}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Candidate Name</label>
+                  <input
+                    value={benForm.display_name}
+                    onChange={e => setBenForm(p => ({ ...p, display_name: e.target.value }))}
+                    placeholder="e.g. Adama Barrow"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Party Name <span className="text-gray-600">(optional)</span></label>
+                  <input
+                    value={benForm.party_name}
+                    onChange={e => setBenForm(p => ({ ...p, party_name: e.target.value }))}
+                    placeholder="e.g. United Democratic Party"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Office Sought <span className="text-gray-600">(optional)</span></label>
+                  <input
+                    value={benForm.office_sought}
+                    onChange={e => setBenForm(p => ({ ...p, office_sought: e.target.value }))}
+                    placeholder="e.g. National Assembly Member"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Story <span className="text-gray-600">(optional)</span></label>
+                  <textarea
+                    value={benForm.story}
+                    onChange={e => setBenForm(p => ({ ...p, story: e.target.value }))}
+                    rows={8}
+                    maxLength={5000}
+                    placeholder="Tell supporters about this candidate or campaign…"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                      text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
+                  />
+                  <p className="text-xs text-gray-600 text-right mt-0.5">{benForm.story.length}/5000</p>
+                </div>
               </div>
             )}
 

@@ -150,6 +150,18 @@ _TEMPLATES = [
         "sort_order": 11,
         "is_active": True,
     },
+    {
+        "name": "Party Meeting",
+        "campaign_type": CampaignType.political,
+        "emoji": "🏛️",
+        "description_template": "Official {party_name} party meeting — all members are invited.",
+        "default_amount_per_person": Decimal("5.00"),
+        "default_visibility_mode": VisibilityMode.full_name,
+        "default_anonymous": False,
+        "whatsapp_share_text_template": "You are invited to the {party_name} party meeting. RSVP and chip in here: {url}",
+        "sort_order": 12,
+        "is_active": True,
+    },
 ]
 
 

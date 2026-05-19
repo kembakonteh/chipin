@@ -15,8 +15,11 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'settings',     label: 'Settings' },
 ]
 
-function tabLabel(id: Tab, campaignType: string | undefined): string {
-  if (id === 'contributors' && campaignType === 'celebration') return 'Guests'
+function tabLabel(id: Tab, campaign: Campaign | undefined): string {
+  if (id === 'contributors') {
+    if (campaign?.campaign_type === 'celebration') return 'Guests'
+    if (campaign?.campaign_type === 'political' && !!(campaign?.event_date || campaign?.event_location)) return 'Attendees'
+  }
   return TABS.find(t => t.id === id)?.label ?? id
 }
 
@@ -82,7 +85,7 @@ export default function CampaignDetail() {
             <h1 className="text-2xl font-bold text-white truncate">{campaign.title}</h1>
             <StatusBadge status={campaign.status} />
           </div>
-          {campaign.description && (
+          {campaign.description && campaign.campaign_type !== 'political' && (
             <p className="text-sm text-gray-500 mt-1 line-clamp-2">{campaign.description}</p>
           )}
         </div>
@@ -102,7 +105,7 @@ export default function CampaignDetail() {
                   : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
                 }`}
             >
-              {tabLabel(t.id, campaign?.campaign_type)}
+              {tabLabel(t.id, campaign)}
               {t.id === 'contributors' && contributors.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-gray-700 px-1.5 py-0.5 text-xs text-gray-400">
                   {contributors.length}

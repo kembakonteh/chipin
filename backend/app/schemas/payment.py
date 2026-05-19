@@ -28,6 +28,7 @@ class PaymentItemResponse(BaseModel):
     payer_name: Optional[str]
     payer_email: Optional[str]
     gross_amount: Decimal
+    stripe_fee: Decimal
     platform_fee: Decimal
     net_amount: Decimal
     currency: str
@@ -36,6 +37,7 @@ class PaymentItemResponse(BaseModel):
 
 class EarningsResponse(BaseModel):
     total_gross: Decimal
+    total_stripe_fees: Decimal
     total_platform_fees: Decimal
     total_net: Decimal
     payment_count: int

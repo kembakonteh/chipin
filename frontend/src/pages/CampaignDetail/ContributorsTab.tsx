@@ -36,6 +36,8 @@ const PAY_METHODS: { value: PaidVia; label: string; icon: string }[] = [
 export default function ContributorsTab({ campaign, contributors }: Props) {
   const isCelebration = campaign.campaign_type === 'celebration'
   const isInvitationOnly = isCelebration && parseFloat(campaign.amount_per_person ?? '0') === 0
+  const isPartyMeeting = campaign.campaign_type === 'political' &&
+    !!(campaign.event_date || campaign.event_time || campaign.event_location)
   const [payTarget, setPayTarget] = useState<Contributor | null>(null)
   const [inviteTarget, setInviteTarget] = useState<Contributor | null | 'new'>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -150,7 +152,9 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
         <span className="shrink-0 mt-px">📱</span>
         <span>{isCelebration
           ? 'Guests are notified via WhatsApp when invited.'
-          : 'Contributors are notified via WhatsApp. Make sure phone numbers are saved for each contributor to enable reminders.'
+          : isPartyMeeting
+            ? 'Members are notified via WhatsApp when invited. RSVPs submitted via the public page appear here.'
+            : 'Contributors are notified via WhatsApp. Make sure phone numbers are saved for each contributor to enable reminders.'
         }</span>
       </div>
 
@@ -158,24 +162,30 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         {/* Summary */}
         <p className="text-sm text-gray-400">
-          <span className="text-white font-medium">{contributors.length}</span> total
-          {' '}—{' '}
-          {isInvitationOnly ? (
-            <>
-              <span className="text-brand-400">{paid.length} attending</span>
-              {unpaid.length > 0 && <> · <span className="text-yellow-400">{unpaid.length} pending</span></>}
-            </>
+          {isPartyMeeting ? (
+            <><span className="text-white font-medium">{contributors.length}</span> <span className="text-brand-400">Attending</span></>
           ) : (
             <>
-              <span className="text-brand-400">{paid.length} {isCelebration ? 'attending' : 'paid'}</span>
-              {invited.length > 0 && <> · <span className="text-sky-400">{invited.length} invited</span></>}
-              {declined.length > 0 && <> · <span className="text-gray-500">{declined.length} declined</span></>}
+              <span className="text-white font-medium">{contributors.length}</span> total
+              {' '}—{' '}
+              {isInvitationOnly ? (
+                <>
+                  <span className="text-brand-400">{paid.length} attending</span>
+                  {unpaid.length > 0 && <> · <span className="text-yellow-400">{unpaid.length} pending</span></>}
+                </>
+              ) : (
+                <>
+                  <span className="text-brand-400">{paid.length} {isCelebration ? 'attending' : 'paid'}</span>
+                  {invited.length > 0 && <> · <span className="text-sky-400">{invited.length} invited</span></>}
+                  {declined.length > 0 && <> · <span className="text-gray-500">{declined.length} declined</span></>}
+                </>
+              )}
             </>
           )}
         </p>
 
         <div className="flex gap-2 flex-wrap">
-          {unpaid.length > 0 && !isInvitationOnly && (
+          {unpaid.length > 0 && !isInvitationOnly && !isPartyMeeting && (
             <button
               type="button"
               onClick={() => remindAllMutation.mutate()}
@@ -186,16 +196,18 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
               {remindAllMutation.isPending ? 'Sending…' : '📱 Remind all unpaid'}
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={exporting || contributors.length === 0}
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs
-              font-medium text-gray-300 hover:bg-gray-700 disabled:opacity-40 transition-colors"
-          >
-            {exporting ? 'Exporting…' : isCelebration ? '⬇ Export Guest List' : '⬇ Export CSV'}
-          </button>
-          {!isInvitationOnly && (
+          {!isPartyMeeting && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || contributors.length === 0}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs
+                font-medium text-gray-300 hover:bg-gray-700 disabled:opacity-40 transition-colors"
+            >
+              {exporting ? 'Exporting…' : isCelebration ? '⬇ Export Guest List' : '⬇ Export CSV'}
+            </button>
+          )}
+          {!isInvitationOnly && !isPartyMeeting && (
             <button
               type="button"
               onClick={() => { setInviteTarget('new'); setShowAdd(false) }}
@@ -211,7 +223,7 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
             className="rounded-lg border border-brand-700 bg-brand-700/20 px-3 py-1.5 text-xs
               font-medium text-brand-300 hover:bg-brand-700/40 transition-colors"
           >
-            {showAdd ? 'Cancel' : isCelebration ? '＋ Add guest' : '＋ Add contributor'}
+            {showAdd ? 'Cancel' : isCelebration ? '＋ Add guest' : isPartyMeeting ? '＋ Add Attendee' : '＋ Add contributor'}
           </button>
         </div>
       </div>
@@ -222,7 +234,7 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
           onSubmit={handleAddSubmit}
           className="rounded-xl border border-brand-700/40 bg-brand-900/20 p-4 space-y-4"
         >
-          <p className="text-sm font-medium text-brand-200">{isCelebration ? 'Add guest' : 'Add contributor'}</p>
+          <p className="text-sm font-medium text-brand-200">{isCelebration ? 'Add guest' : isPartyMeeting ? 'Add attendee' : 'Add contributor'}</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
@@ -337,7 +349,7 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
                 ? 'Add Guest'
                 : form.paid_via
                   ? `Add & mark paid via ${PAY_METHODS.find(m => m.value === form.paid_via)?.label}`
-                  : 'Add (unpaid)'}
+                  : isPartyMeeting ? 'Add Attendee' : 'Add (unpaid)'}
           </button>
         </form>
       )}
@@ -345,7 +357,7 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
       {/* Contributor list */}
       {contributors.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-700 p-10 text-center">
-          <p className="text-gray-500 text-sm">{isCelebration ? 'No guests yet.' : 'No contributors yet.'}</p>
+          <p className="text-gray-500 text-sm">{isCelebration ? 'No guests yet.' : isPartyMeeting ? 'No attendees yet.' : 'No contributors yet.'}</p>
         </div>
       ) : isInvitationOnly ? (
         <div className="space-y-2">
@@ -374,6 +386,24 @@ export default function ContributorsTab({ campaign, contributors }: Props) {
               ))}
             </>
           )}
+        </div>
+      ) : isPartyMeeting ? (
+        <div className="space-y-2">
+          {[...paid, ...unpaid].map(c => (
+            <div
+              key={c.id}
+              className="flex items-center gap-3 rounded-lg px-4 py-3 bg-gray-900 border border-gray-800"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-700 text-brand-200 text-sm">✓</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-white truncate block">{c.name}</span>
+                {c.phone && <p className="text-xs text-gray-500 mt-0.5">{c.phone}</p>}
+              </div>
+              <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-brand-900/50 text-brand-300 border border-brand-800/40">
+                ✅ Attending
+              </span>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-2">

@@ -24,6 +24,8 @@ interface PublicBeneficiary {
   photo_url: string | null
   story: string | null
   location: string | null
+  party_name: string | null
+  office_sought: string | null
 }
 
 interface PublicCampaign {
@@ -51,6 +53,7 @@ interface PublicCampaign {
   event_location: string | null
   event_rsvp: string | null
   party_color: string | null
+  platform_fee_pct: string | null
 }
 
 interface LiveStats {
@@ -254,7 +257,270 @@ export default function PublicCampaign() {
     campaign.goal_amount == null &&
     parseFloat(campaign.amount_per_person ?? '0') === 0
 
-  const showPaySection = !isInvitationOnly
+  // Party meeting: political campaign with event details
+  const hasEvent = !!(campaign.event_date || campaign.event_time || campaign.event_location)
+  const isPartyMeeting = campaign.campaign_type === 'political' && hasEvent
+  const pc = campaign.party_color ?? '#16a34a'
+
+  // Hide pay section for party meetings with no dues and no fundraising goal
+  const hidePayForMeeting = isPartyMeeting &&
+    campaign.goal_amount == null &&
+    parseFloat(campaign.amount_per_person ?? '0') === 0
+
+  const showPaySection = !isInvitationOnly && !hidePayForMeeting
+
+  // ── Party Meeting: dedicated RSVP page ───────────────────────────────────
+  if (isPartyMeeting) {
+    const fmtMeetingDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    })
+    const allAttendees = [...campaign.contributors].sort((a, b) =>
+      a.paid === b.paid ? 0 : a.paid ? -1 : 1
+    )
+    const rsvpCount = totalCount
+
+    const submitRsvp = async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!rsvpName.trim()) { setRsvpError('Name is required.'); return }
+      setRsvpError('')
+      setRsvpSubmitting(true)
+      try {
+        await http.post(`/p/${slug}/rsvp`, {
+          name: rsvpName.trim(),
+          phone: rsvpPhone.trim() || null,
+          email: rsvpEmail.trim() || null,
+          note: rsvpMessage.trim() || null,
+        })
+        setRsvpDone(true)
+        qc.invalidateQueries({ queryKey: ['public', slug] })
+      } catch (err: unknown) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data as { detail?: string })?.detail ?? 'Could not submit. Please try again.'
+          : 'Could not submit. Please try again.'
+        setRsvpError(msg)
+      } finally {
+        setRsvpSubmitting(false)
+      }
+    }
+
+    return (
+      <div className="min-h-screen font-sans" style={{ backgroundColor: '#0f172a' }}>
+
+        {/* ── New-payer flash ── */}
+        {newPayer && (
+          <div className="fixed bottom-4 inset-x-4 z-50 flex justify-center pointer-events-none">
+            <style>{`@keyframes partySlideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+            <div
+              className="rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-2xl"
+              style={{ backgroundColor: pc, animation: 'partySlideUp 0.35s cubic-bezier(0.16,1,0.3,1)' }}
+            >
+              🏛️ {newPayer} just RSVP'd!
+            </div>
+          </div>
+        )}
+
+        {/* ── Hero ── */}
+        <div
+          className="relative px-4 pb-10 pt-12 overflow-hidden"
+          style={{ backgroundImage: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%)' }}
+        >
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: `radial-gradient(ellipse at top, ${pc}33 0%, transparent 60%)` }}
+          />
+          <div className="relative max-w-sm mx-auto text-center">
+            <span className="text-7xl block mb-4">{campaign.emoji}</span>
+            <h1 className="text-2xl font-bold leading-tight text-white mb-6">{campaign.title}</h1>
+
+            {(campaign.event_date || campaign.event_time || campaign.event_location) && (
+              <div
+                className="rounded-2xl px-5 py-4 space-y-3 text-left"
+                style={{ backgroundColor: pc + '15', border: `1px solid ${pc}44` }}
+              >
+                {campaign.event_date && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-lg leading-none mt-0.5">📅</span>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'cc' }}>Date</p>
+                      <p className="text-white text-sm">{fmtMeetingDate(campaign.event_date)}</p>
+                    </div>
+                  </div>
+                )}
+                {campaign.event_time && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-lg leading-none mt-0.5">🕐</span>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'cc' }}>Time</p>
+                      <p className="text-white text-sm">{campaign.event_time}</p>
+                    </div>
+                  </div>
+                )}
+                {campaign.event_location && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-lg leading-none mt-0.5">📍</span>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'cc' }}>Location</p>
+                      <p className="text-white text-sm">{campaign.event_location}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── About This Meeting ── */}
+        {campaign.description && (
+          <div className="px-4 py-5" style={{ backgroundColor: '#1e293b', borderBottom: '1px solid #334155' }}>
+            <div className="max-w-sm mx-auto border-l-4 pl-4" style={{ borderLeftColor: pc }}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: pc }}>
+                About This Meeting
+              </h3>
+              <p className="text-gray-200 text-sm leading-relaxed">{campaign.description}</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── RSVP section ── */}
+        <div className="px-4 py-6" style={{ backgroundColor: '#1e293b', borderBottom: '1px solid #334155' }}>
+          <div className="max-w-sm mx-auto">
+            {rsvpCount > 0 && !rsvpDone && (
+              <div className="flex justify-center mb-5">
+                <div
+                  className="rounded-full px-4 py-1.5 text-sm font-medium"
+                  style={{ backgroundColor: pc + '22', color: pc, border: `1px solid ${pc}44` }}
+                >
+                  🏛️ {rsvpCount} {rsvpCount === 1 ? 'person has' : 'people have'} RSVP'd
+                </div>
+              </div>
+            )}
+
+            {rsvpDone ? (
+              <div
+                className="rounded-2xl px-6 py-8 text-center"
+                style={{ backgroundColor: pc + '11', border: `1px solid ${pc}33` }}
+              >
+                <span className="text-5xl block mb-3">✅</span>
+                <p className="font-bold text-white text-lg mb-1">You're on the list!</p>
+                <p className="text-sm text-gray-400">See you at the meeting.</p>
+              </div>
+            ) : isActive ? (
+              <form className="space-y-3" onSubmit={submitRsvp}>
+                <h3 className="text-center text-base font-bold text-white mb-2">RSVP to This Meeting</h3>
+                <input
+                  required
+                  placeholder="Full name *"
+                  value={rsvpName}
+                  onChange={e => setRsvpName(e.target.value)}
+                  className="w-full rounded-xl border px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none"
+                  style={{ backgroundColor: '#0f172a', borderColor: '#475569' }}
+                />
+                <input
+                  placeholder="Phone (optional)"
+                  value={rsvpPhone}
+                  onChange={e => setRsvpPhone(e.target.value)}
+                  className="w-full rounded-xl border px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none"
+                  style={{ backgroundColor: '#0f172a', borderColor: '#475569' }}
+                />
+                <input
+                  placeholder="Email (optional)"
+                  value={rsvpEmail}
+                  onChange={e => setRsvpEmail(e.target.value)}
+                  className="w-full rounded-xl border px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none"
+                  style={{ backgroundColor: '#0f172a', borderColor: '#475569' }}
+                />
+                <textarea
+                  placeholder="Note (optional)"
+                  value={rsvpMessage}
+                  onChange={e => setRsvpMessage(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl border px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none resize-none"
+                  style={{ backgroundColor: '#0f172a', borderColor: '#475569' }}
+                />
+                {rsvpError && <p className="text-xs text-red-400">{rsvpError}</p>}
+                <button
+                  type="submit"
+                  disabled={rsvpSubmitting}
+                  className="w-full rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: pc }}
+                >
+                  {rsvpSubmitting ? 'Submitting…' : 'RSVP — Count Me In 🏛️'}
+                </button>
+              </form>
+            ) : (
+              <div className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-4 text-center text-sm text-gray-400">
+                This meeting is no longer accepting RSVPs.
+              </div>
+            )}
+
+            {amountPer != null && amountPer > 0 && (
+              <div
+                className="mt-4 rounded-xl px-4 py-3 text-sm"
+                style={{ backgroundColor: pc + '11', border: `1px solid ${pc}33` }}
+              >
+                <p style={{ color: pc }}>
+                  📋 Meeting dues: {fmt(amountPer, campaign.currency)} — payment details will be shared by the organizer.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Confirmed Attendees ── */}
+        <div className="px-4 py-6" style={{ backgroundColor: '#0f172a' }}>
+          <div className="max-w-sm mx-auto">
+            <h2 className="text-base font-bold text-white mb-4">
+              ✅ Confirmed Attendees ({rsvpCount})
+            </h2>
+            {allAttendees.length === 0 ? (
+              <div className="rounded-xl py-10 text-center" style={{ border: '1px dashed #334155' }}>
+                <p className="text-gray-500 text-sm">Be the first to RSVP! 🏛️</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {allAttendees.map((c, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-xl px-4 py-3"
+                    style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                  >
+                    <div
+                      className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                      style={{ backgroundColor: pc + '55' }}
+                    >
+                      {initials(c.display_name)}
+                    </div>
+                    <p className="flex-1 text-sm font-medium text-white truncate">{c.display_name}</p>
+                    {c.paid ? (
+                      <span
+                        className="shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: pc + '22', color: pc }}
+                      >
+                        Dues paid
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs font-medium text-gray-500 px-2.5 py-0.5 rounded-full bg-slate-700">
+                        RSVP'd
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="px-4 pb-10 pt-4 text-center" style={{ backgroundColor: '#0f172a' }}>
+          <p className="text-xs text-gray-600">
+            Powered by <span className="font-semibold text-brand-600">ChipIn</span>
+            {' · '}
+            <span className="text-gray-600">kafotech.io</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -275,10 +541,24 @@ export default function PublicCampaign() {
       )}
 
       {/* ── New-payer flash ── */}
-      {newPayer && (
+      {newPayer && campaign.campaign_type !== 'political' && (
         <div className="animate-pulse fixed top-0 inset-x-0 z-50 px-4 py-3 text-center text-sm
           font-medium text-white bg-brand-500 shadow-lg">
           💚 {newPayer} just chipped in!
+        </div>
+      )}
+      {newPayer && campaign.campaign_type === 'political' && (
+        <div className="fixed bottom-4 inset-x-4 z-50 flex justify-center pointer-events-none">
+          <style>{`@keyframes politicalSlideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+          <div
+            className="rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-2xl"
+            style={{
+              backgroundColor: campaign.party_color ?? '#16a34a',
+              animation: 'politicalSlideUp 0.35s cubic-bezier(0.16,1,0.3,1)',
+            }}
+          >
+            {isPartyMeeting ? `🏛️ ${newPayer} just RSVP'd!` : `🎉 ${newPayer} just contributed!`}
+          </div>
         </div>
       )}
 
@@ -505,6 +785,79 @@ export default function PublicCampaign() {
         </div>
       )}
 
+      {/* ── Political party meeting RSVP ── */}
+      {campaign.campaign_type === 'political' && hasEvent && isActive && (
+        <div className="px-4 py-6 bg-slate-900 border-b border-slate-700">
+          {rsvpDone ? (
+            <div className="text-center space-y-2 py-4">
+              <span className="text-4xl block">✅</span>
+              <p className="font-semibold text-white">You're on the list!</p>
+              <p className="text-sm text-gray-400">We'll see you at the meeting.</p>
+            </div>
+          ) : (
+            <form className="space-y-3 max-w-sm mx-auto" onSubmit={async (e) => {
+              e.preventDefault()
+              if (!rsvpName.trim()) { setRsvpError('Name is required.'); return }
+              setRsvpError('')
+              setRsvpSubmitting(true)
+              try {
+                await http.post(`/p/${slug}/rsvp`, {
+                  name: rsvpName.trim(),
+                  phone: rsvpPhone.trim() || null,
+                  email: rsvpEmail.trim() || null,
+                  note: rsvpMessage.trim() || null,
+                })
+                setRsvpDone(true)
+              } catch (err: unknown) {
+                const msg = axios.isAxiosError(err)
+                  ? (err.response?.data as { detail?: string })?.detail ?? 'Could not submit. Please try again.'
+                  : 'Could not submit. Please try again.'
+                setRsvpError(msg)
+              } finally {
+                setRsvpSubmitting(false)
+              }
+            }}>
+              <p className="text-center text-sm font-semibold text-white mb-3">RSVP to this Meeting</p>
+              <input
+                required
+                placeholder="Your name *"
+                value={rsvpName}
+                onChange={e => setRsvpName(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+              />
+              <input
+                placeholder="Phone (optional)"
+                value={rsvpPhone}
+                onChange={e => setRsvpPhone(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+              />
+              <input
+                placeholder="Email (optional)"
+                value={rsvpEmail}
+                onChange={e => setRsvpEmail(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+              />
+              <textarea
+                placeholder="Anything you'd like to say? (optional)"
+                value={rsvpMessage}
+                onChange={e => setRsvpMessage(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none resize-none"
+              />
+              {rsvpError && <p className="text-xs text-red-400">{rsvpError}</p>}
+              <button
+                type="submit"
+                disabled={rsvpSubmitting}
+                className="w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+                style={{ backgroundColor: pc }}
+              >
+                {rsvpSubmitting ? 'Submitting…' : '✓ Count me in!'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
       {/* ── Pay section ── */}
       {showPaySection && <div id="pay-section" className="px-4 py-6 bg-white border-b border-gray-100">
         {!isActive && (
@@ -519,6 +872,22 @@ export default function PublicCampaign() {
             <p className="text-center text-sm font-medium text-gray-600 mb-1">
               {campaign.campaign_type === 'political' ? 'Make Your Contribution' : 'How would you like to pay?'}
             </p>
+            {campaign.campaign_type === 'political' && (() => {
+              const gross = parseFloat(amount) || 0
+              if (gross <= 0) return null
+              const stripeFee = Math.round((gross * 0.029 + 0.30) * 100) / 100
+              const platformFee = Math.round(gross * (parseFloat(campaign.platform_fee_pct ?? '2') / 100) * 100) / 100
+              const net = Math.round((gross - stripeFee - platformFee) * 100) / 100
+              return (
+                <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-600 space-y-1">
+                  <p className="font-semibold text-slate-700 mb-1.5">Fee breakdown</p>
+                  <div className="flex justify-between"><span>Your contribution</span><span className="font-medium text-slate-900">{fmt(gross, campaign.currency)}</span></div>
+                  <div className="flex justify-between"><span>Platform fee ({campaign.platform_fee_pct ?? '2'}%)</span><span>− {fmt(platformFee, campaign.currency)}</span></div>
+                  <div className="flex justify-between"><span>Processing fee (Stripe 2.9% + $0.30)</span><span>− {fmt(stripeFee, campaign.currency)}</span></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1 mt-1 font-semibold text-slate-800"><span>Net to campaign</span><span>{fmt(Math.max(0, net), campaign.currency)}</span></div>
+                </div>
+              )
+            })()}
             <button
               type="button"
               onClick={() => setPayMode('card')}
@@ -726,10 +1095,13 @@ export default function PublicCampaign() {
       <div className="px-4 py-6">
         <div className="flex items-baseline gap-2 mb-4">
           <h2 className="text-base font-bold text-gray-800">
-            {BOARD_TITLE[campaign.campaign_type] ?? 'Contributors'}
+            {isPartyMeeting ? 'Members & RSVPs 🏛️' : (BOARD_TITLE[campaign.campaign_type] ?? 'Contributors')}
           </h2>
-          {campaign.campaign_type === 'political' && paidCount > 0 && (
+          {campaign.campaign_type === 'political' && !isPartyMeeting && paidCount > 0 && (
             <span className="text-sm font-semibold text-brand-600">{paidCount} and counting</span>
+          )}
+          {isPartyMeeting && (paidCount + pendingCount) > 0 && (
+            <span className="text-sm font-semibold text-brand-600">{paidCount + pendingCount} RSVP'd</span>
           )}
         </div>
 
@@ -750,6 +1122,47 @@ export default function PublicCampaign() {
           </div>
         )}
       </div>
+
+      {/* ── Top Supporters Leaderboard — political fundraisers only ── */}
+      {campaign.campaign_type === 'political' && !isPartyMeeting && (() => {
+        const topFive = [...campaign.contributors]
+          .filter(c => c.paid)
+          .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))
+          .slice(0, 5)
+        if (topFive.length === 0) return null
+        const pc = campaign.party_color ?? '#16a34a'
+        const rankEmojis = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
+        return (
+          <div className="px-4 py-6 bg-slate-900 border-t border-slate-700">
+            <h2 className="text-base font-bold text-white mb-4">🏆 Top Supporters</h2>
+            <div className="space-y-2">
+              {topFive.map((c, i) => {
+                const isAnon = c.display_name === 'Anonymous'
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-xl px-4 py-3"
+                    style={{
+                      backgroundColor: i === 0 ? pc + '22' : 'rgba(30,41,59,0.6)',
+                      border: i === 0 ? `1px solid ${pc}44` : '1px solid rgba(71,85,105,0.3)',
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{rankEmojis[i]}</span>
+                      <span className={`text-sm font-medium ${isAnon ? 'text-gray-500 italic' : 'text-white'}`}>
+                        {isAnon ? 'Anonymous' : c.display_name}
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: pc }}>
+                      {fmt(parseFloat(c.amount), campaign.currency)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Footer ── */}
       <div className="px-4 pb-10 pt-4 text-center">
@@ -971,6 +1384,21 @@ function PoliticalHero({
   const remaining = goalAmount != null ? Math.max(0, goalAmount - totalRaised) : null
   const pc = campaign.party_color ?? '#16a34a'
   const pcText = isLightColor(pc) ? '#1e293b' : '#ffffff'
+  const [linkCopied, setLinkCopied] = useState(false)
+  const heroHasEvent = !!(campaign.event_date || campaign.event_time || campaign.event_location || campaign.event_rsvp)
+
+  function fmtEventDate(iso: string): string {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    })
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    })
+  }
 
   function scrollToPay() {
     document.getElementById('pay-section')?.scrollIntoView({ behavior: 'smooth' })
@@ -1014,8 +1442,8 @@ function PoliticalHero({
               <p className="text-xs mt-1 text-center" style={{ color: pc + 'cc' }}>📍 {b.location}</p>
             )}
             {b.story && (
-              <p className="text-gray-300 text-sm mt-2 text-center leading-relaxed max-w-xs">
-                {b.story.length > 120 ? b.story.slice(0, 120) + '…' : b.story}
+              <p className="text-gray-300 text-sm mt-2 text-center leading-relaxed">
+                {b.story}
               </p>
             )}
           </div>
@@ -1049,9 +1477,97 @@ function PoliticalHero({
           )}
         </div>
 
+        {/* Event details card — party meeting */}
+        {heroHasEvent && (
+          <div
+            className="rounded-2xl px-5 py-4 space-y-3 mb-5 border"
+            style={{ backgroundColor: pc + '11', borderColor: pc + '44' }}
+          >
+            {campaign.event_date && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">📅</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'bb' }}>Date</p>
+                  <p className="text-white text-sm">{fmtEventDate(campaign.event_date)}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_time && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">🕐</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'bb' }}>Time</p>
+                  <p className="text-white text-sm">{campaign.event_time}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_location && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">📍</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'bb' }}>Location</p>
+                  <p className="text-white text-sm">{campaign.event_location}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_rsvp && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">✉️</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider" style={{ color: pc + 'bb' }}>RSVP Contact</p>
+                  <p className="text-white text-sm">{campaign.event_rsvp}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Milestone badge */}
+        {goalAmount != null && paidCount > 0 && (() => {
+          const pct = animProgress
+          let badge: { emoji: string; text: string } | null = null
+          if (pct >= 100)      badge = { emoji: '🏆', text: 'Goal Reached!' }
+          else if (pct >= 75)  badge = { emoji: '⚡', text: 'Almost There!' }
+          else if (pct >= 50)  badge = { emoji: '🔥', text: 'Halfway There!' }
+          else if (pct >= 25)  badge = { emoji: '🌱', text: 'Gaining Momentum!' }
+          if (!badge) return null
+          return (
+            <div className="flex justify-center mb-3">
+              <div
+                className="rounded-full px-4 py-2 text-sm font-bold"
+                style={{
+                  backgroundColor: pc + '22',
+                  color: pc,
+                  border: `1.5px solid ${pc}66`,
+                  boxShadow: `0 0 12px ${pc}33`,
+                }}
+              >
+                {badge.emoji} {badge.text}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Countdown */}
+        {campaign.due_date && (() => {
+          const daysLeft = dl.daysLeft
+          let label: string
+          if (daysLeft == null || daysLeft < 0) label = '🏁 Campaign ended'
+          else if (daysLeft === 0)              label = '🗳️ Last day to contribute!'
+          else if (daysLeft === 1)              label = '🗳️ Election day is tomorrow!'
+          else                                  label = `⏳ ${daysLeft} days remaining`
+          return (
+            <div className="flex justify-center mb-4">
+              <div className="rounded-full px-4 py-1.5 text-xs font-medium bg-slate-700/60 text-gray-300 border border-slate-600/40">
+                {label}
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Stat pills */}
         <div className="flex justify-center gap-2 flex-wrap mb-6">
-          <PoliticalPill label="Supporters" value={String(paidCount)} partyColor={pc} />
+          <PoliticalPill label={heroHasEvent ? 'Attending' : 'Supporters'} value={String(paidCount)} partyColor={pc} />
           {dl.daysLeft != null && dl.daysLeft >= 0 && (
             <PoliticalPill label="Days left" value={String(dl.daysLeft)} partyColor={pc} />
           )}
@@ -1059,6 +1575,49 @@ function PoliticalHero({
             <PoliticalPill label="Remaining" value={fmt(remaining, campaign.currency)} partyColor={pc} />
           )}
         </div>
+
+        {/* Share buttons */}
+        {(() => {
+          const shareUrl = encodeURIComponent(window.location.href)
+          const candidateName = b?.display_name ?? campaign.title
+          const officeSought = b?.office_sought
+          const waText = encodeURIComponent(
+            officeSought
+              ? `Support ${candidateName} for ${officeSought}! Chip in here: ${window.location.href}`
+              : `Support ${candidateName}'s campaign! Chip in here: ${window.location.href}`
+          )
+          const xText = encodeURIComponent(`Support ${candidateName}'s campaign!`)
+          return (
+            <div className="flex gap-2 mb-6">
+              <a
+                href={`https://wa.me/?text=${waText}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#25D366' }}
+              >
+                <span>📱</span><span>WhatsApp</span>
+              </a>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#1877F2' }}
+              >
+                <span>{linkCopied ? '✓' : '📋'}</span><span>{linkCopied ? 'Link Copied! Paste on Facebook' : 'Copy & Share'}</span>
+              </button>
+              <a
+                href={`https://twitter.com/intent/tweet?text=${xText}&url=${shareUrl}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#000000' }}
+              >
+                <span className="font-bold">𝕏</span><span>Twitter</span>
+              </a>
+            </div>
+          )
+        })()}
 
         {/* CTA */}
         <button
@@ -1069,6 +1628,21 @@ function PoliticalHero({
         >
           Support This Campaign →
         </button>
+
+        {/* Social proof bar */}
+        {paidCount > 0 && (
+          <div className="mt-4 flex justify-center">
+            <div
+              className="rounded-full px-4 py-1.5 text-xs font-medium"
+              style={{ backgroundColor: pc + '22', color: pc, border: `1px solid ${pc}44` }}
+            >
+              {heroHasEvent
+                ? `🏛️ ${paidCount} member${paidCount !== 1 ? 's' : ''} attending`
+                : `🇬🇲 ${paidCount} Gambian${paidCount !== 1 ? 's' : ''} have contributed`
+              }
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -15,9 +15,23 @@ interface PurchaseRecord {
   purchased_at: string
 }
 
+interface EarningsData {
+  total_gross: string
+  total_stripe_fees: string
+  total_platform_fees: string
+  total_net: string
+  payment_count: number
+}
+
 interface Props {
   campaign: Campaign
   contributors: Contributor[]
+}
+
+function fmtEventDate(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  })
 }
 
 export default function OverviewTab({ campaign, contributors }: Props) {
@@ -25,6 +39,8 @@ export default function OverviewTab({ campaign, contributors }: Props) {
   const isInvitationOnly = campaign.campaign_type === 'celebration' &&
     parseFloat(campaign.amount_per_person ?? '0') === 0 &&
     campaign.goal_amount == null
+  const isPartyMeeting = campaign.campaign_type === 'political' &&
+    !!(campaign.event_date || campaign.event_location)
 
   const { data: overviewPurchases = [] } = useQuery<PurchaseRecord[]>({
     queryKey: ['purchases', campaign.slug],
@@ -41,13 +57,19 @@ export default function OverviewTab({ campaign, contributors }: Props) {
     queryFn: () => api.get<PayoutMethod[]>('/users/payout-methods').then(r => r.data),
   })
 
+  const { data: earnings } = useQuery<EarningsData>({
+    queryKey: ['earnings', campaign.slug],
+    queryFn: () => api.get<EarningsData>(`/campaigns/${campaign.slug}/earnings`).then(r => r.data),
+    enabled: !isInvitationOnly && !isPartyMeeting,
+  })
+
   const { data: overviewBeneficiary } = useQuery<Beneficiary | null>({
     queryKey: ['beneficiary', campaign.slug],
     queryFn: () =>
       api.get<Beneficiary>(`/campaigns/${campaign.slug}/beneficiary`)
         .then(r => r.data)
         .catch(e => e?.response?.status === 404 ? null : Promise.reject(e)),
-    enabled: campaign.campaign_type === 'celebration',
+    enabled: campaign.campaign_type === 'celebration' || campaign.campaign_type === 'political',
     staleTime: 30_000,
   })
 
@@ -113,50 +135,115 @@ export default function OverviewTab({ campaign, contributors }: Props) {
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank')
   }
 
+  const pc = campaign.party_color ?? '#16a34a'
+
   return (
     <div className="space-y-6">
-      {/* Progress + key stats */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-        <div className="flex flex-col sm:flex-row items-center gap-8">
-          {isInvitationOnly ? (
-            <div className="h-40 w-40 shrink-0 rounded-full overflow-hidden border-4 border-yellow-600/60 bg-gray-800 flex items-center justify-center">
-              {overviewBeneficiary?.photo_url ? (
-                <img src={overviewBeneficiary.photo_url} alt={overviewBeneficiary.display_name} className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-5xl">{campaign.emoji}</span>
-              )}
-            </div>
-          ) : stats.goalAmount != null ? (
-            <ProgressRing percent={stats.progress} size={160} strokeWidth={14} label="funded" />
-          ) : (
-            <div className="flex flex-col items-center justify-center w-40 h-40 rounded-full
-              border-4 border-gray-800 shrink-0">
-              <span className="text-3xl">{campaign.emoji}</span>
-              <span className="text-xs text-gray-500 mt-1">open goal</span>
-            </div>
-          )}
-
-          {isInvitationOnly ? (
-            <div className="grid grid-cols-2 gap-x-10 gap-y-4 flex-1 w-full sm:w-auto">
-              <Stat label="Total guests" value={String(stats.totalCount)} />
-              <Stat label="Attending" value={String(stats.paidCount)} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-x-10 gap-y-4 flex-1 w-full sm:w-auto">
-              <Stat label="Total raised" value={fmt(stats.totalRaised, campaign.currency)} accent />
-              <Stat label="Goal" value={stats.goalAmount != null ? fmt(stats.goalAmount, campaign.currency) : '—'} />
-              <Stat label={campaign.campaign_type === 'celebration' ? 'Attending' : 'Paid'} value={String(stats.paidCount)} />
-              <Stat label={campaign.campaign_type === 'celebration' ? 'Total guests' : 'Total contributors'} value={String(stats.totalCount)} />
-            </div>
-          )}
+      {/* Party meeting event details card — shown first */}
+      {isPartyMeeting && (
+        <div
+          className="rounded-xl border border-gray-800 bg-gray-900 p-6 border-l-4"
+          style={{ borderLeftColor: pc }}
+        >
+          <h3 className="text-sm font-semibold text-white mb-4">📅 Meeting Details</h3>
+          <div className="space-y-3">
+            {campaign.event_date && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">📅</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider mb-0.5" style={{ color: pc }}>Date</p>
+                  <p className="text-sm text-white">{fmtEventDate(campaign.event_date)}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_time && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">🕐</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider mb-0.5" style={{ color: pc }}>Time</p>
+                  <p className="text-sm text-white">{campaign.event_time}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_location && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">📍</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider mb-0.5" style={{ color: pc }}>Location</p>
+                  <p className="text-sm text-white">{campaign.event_location}</p>
+                </div>
+              </div>
+            )}
+            {campaign.event_rsvp && (
+              <div className="flex items-start gap-3">
+                <span className="text-lg leading-none mt-0.5">✉️</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider mb-0.5" style={{ color: pc }}>RSVP Contact</p>
+                  <p className="text-sm text-white">{campaign.event_rsvp}</p>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Attendance summary */}
+          <div className="mt-4 pt-4 border-t border-gray-800">
+            <p className="text-xs text-gray-500">Total RSVPs</p>
+            <p className="text-xl font-bold text-white mt-0.5">{stats.totalCount}</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* About This Collection / Campaign — charity & political */}
+      {/* Political hero card — hide for party meetings */}
+      {campaign.campaign_type === 'political' && !isPartyMeeting && (
+        <PoliticalHeroCard campaign={campaign} beneficiary={overviewBeneficiary} stats={stats} />
+      )}
+
+      {/* Progress + key stats — hide for party meetings */}
+      {!isPartyMeeting && (
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+          <div className="flex flex-col sm:flex-row items-center gap-8">
+            {isInvitationOnly ? (
+              <div className="h-40 w-40 shrink-0 rounded-full overflow-hidden border-4 border-yellow-600/60 bg-gray-800 flex items-center justify-center">
+                {overviewBeneficiary?.photo_url ? (
+                  <img src={overviewBeneficiary.photo_url} alt={overviewBeneficiary.display_name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-5xl">{campaign.emoji}</span>
+                )}
+              </div>
+            ) : stats.goalAmount != null ? (
+              <ProgressRing percent={stats.progress} size={160} strokeWidth={14} label="funded" />
+            ) : (
+              <div className="flex flex-col items-center justify-center w-40 h-40 rounded-full
+                border-4 border-gray-800 shrink-0">
+                <span className="text-3xl">{campaign.emoji}</span>
+                <span className="text-xs text-gray-500 mt-1">open goal</span>
+              </div>
+            )}
+
+            {isInvitationOnly ? (
+              <div className="grid grid-cols-2 gap-x-10 gap-y-4 flex-1 w-full sm:w-auto">
+                <Stat label="Total guests" value={String(stats.totalCount)} />
+                <Stat label="Attending" value={String(stats.paidCount)} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-x-10 gap-y-4 flex-1 w-full sm:w-auto">
+                <Stat label="Total raised" value={fmt(stats.totalRaised, campaign.currency)} accent />
+                <Stat label="Goal" value={stats.goalAmount != null ? fmt(stats.goalAmount, campaign.currency) : '—'} />
+                <Stat label={campaign.campaign_type === 'celebration' ? 'Attending' : 'Paid'} value={String(stats.paidCount)} />
+                <Stat label={campaign.campaign_type === 'celebration' ? 'Total guests' : 'Total contributors'} value={String(stats.totalCount)} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* About section */}
       {(campaign.campaign_type === 'charity' || campaign.campaign_type === 'political') && campaign.description && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 border-l-4 border-l-brand-500">
+        <div
+          className={`rounded-xl border border-gray-800 bg-gray-900 p-6 border-l-4 ${campaign.campaign_type === 'political' ? '' : 'border-l-brand-500'}`}
+          style={campaign.campaign_type === 'political' ? { borderLeftColor: pc } : undefined}
+        >
           <h3 className="text-sm font-semibold text-white mb-3">
-            {campaign.campaign_type === 'political' ? 'About This Campaign' : 'About This Collection'}
+            {isPartyMeeting ? 'About This Meeting' : campaign.campaign_type === 'political' ? 'About This Campaign' : 'About This Collection'}
           </h3>
           <p className="text-sm text-gray-200 leading-relaxed">{campaign.description}</p>
         </div>
@@ -166,24 +253,26 @@ export default function OverviewTab({ campaign, contributors }: Props) {
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
         <h3 className="text-sm font-semibold text-white mb-3">Shareable link</h3>
         <CopyLinkBar campaign={campaign} contributors={contributors} />
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={handleShareStandings}
-            className="flex items-center justify-center gap-2 rounded-lg border border-green-700
-              bg-green-900/40 px-4 py-2 text-sm font-medium text-green-300
-              hover:bg-green-800/60 transition-colors w-full sm:w-auto"
-          >
-            <span>📊</span>
-            <span>Share Standings</span>
-          </button>
-        </div>
+        {campaign.campaign_type !== 'political' && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={handleShareStandings}
+              className="flex items-center justify-center gap-2 rounded-lg border border-green-700
+                bg-green-900/40 px-4 py-2 text-sm font-medium text-green-300
+                hover:bg-green-800/60 transition-colors w-full sm:w-auto"
+            >
+              <span>📊</span>
+              <span>Share Standings</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* QR collection card */}
-      {!isInvitationOnly && <QrCardDownload slug={campaign.slug} />}
+      {!isInvitationOnly && campaign.campaign_type !== 'political' && <QrCardDownload slug={campaign.slug} />}
 
-      {campaign.payout_enabled === false && (
+      {campaign.payout_enabled === false && campaign.campaign_type !== 'political' && (
         <RecordPurchasePanel
           campaign={campaign}
           totalCollected={stats.net}
@@ -191,28 +280,41 @@ export default function OverviewTab({ campaign, contributors }: Props) {
         />
       )}
 
-      {/* Beneficiary profile (memorial/charity) */}
-      {(campaign.campaign_type === 'memorial' || campaign.campaign_type === 'political') && (
+      {/* Candidate / Party Profile — hide for party meetings */}
+      {(campaign.campaign_type === 'memorial' || (campaign.campaign_type === 'political' && !isPartyMeeting)) && (
         <BeneficiaryCard campaign={campaign} />
       )}
 
-      {/* Send Funds — payout panel */}
-      {!isInvitationOnly && <SendFundsPanel campaign={campaign} netBalance={stats.net} />}
+      {/* Send Funds — hide for party meetings */}
+      {!isInvitationOnly && !isPartyMeeting && <SendFundsPanel campaign={campaign} netBalance={stats.net} earnings={earnings} />}
 
-      {/* Earnings summary */}
-      {!isInvitationOnly && (
+      {/* Fundraising Summary — hide for party meetings */}
+      {!isInvitationOnly && !isPartyMeeting && (
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-          <h3 className="text-sm font-semibold text-white mb-4">Earnings summary</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">
+            {campaign.campaign_type === 'political' ? 'Fundraising Summary' : 'Earnings summary'}
+          </h3>
           <div className="space-y-3">
             <EarningsRow label="Total raised" value={fmt(stats.totalRaised, campaign.currency)} />
-            {/* <EarningsRow
-              label={`Platform fee (${campaign.platform_fee_pct}%)`}
-              value={`− ${fmt(stats.platformFees, campaign.currency)}`}
-              muted
-            /> */}
-            <div className="border-t border-gray-800 pt-3">
-              <EarningsRow label="Net to organizer" value={fmt(stats.net, campaign.currency)} accent />
-            </div>
+            {campaign.campaign_type !== 'political' && earnings && parseFloat(earnings.total_platform_fees) > 0 && (
+              <EarningsRow
+                label={`Platform fee (${campaign.platform_fee_pct}%)`}
+                value={`− ${fmt(parseFloat(earnings.total_platform_fees), campaign.currency)}`}
+                muted
+              />
+            )}
+            {campaign.campaign_type !== 'political' && earnings && parseFloat(earnings.total_stripe_fees) > 0 && (
+              <EarningsRow
+                label="Processing fees (Stripe)"
+                value={`− ${fmt(parseFloat(earnings.total_stripe_fees), campaign.currency)}`}
+                muted
+              />
+            )}
+            {campaign.campaign_type !== 'political' && (
+              <div className="border-t border-gray-800 pt-3">
+                <EarningsRow label="Net to organizer" value={fmt(stats.net, campaign.currency)} accent />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -314,7 +416,7 @@ function PayoutStatusBadge({ status }: { status: string }) {
 
 // ── Send Funds panel ──────────────────────────────────────────────────────────
 
-function SendFundsPanel({ campaign, netBalance }: { campaign: Campaign; netBalance: number }) {
+function SendFundsPanel({ campaign, netBalance, earnings }: { campaign: Campaign; netBalance: number; earnings?: EarningsData }) {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState('')
@@ -380,7 +482,10 @@ function SendFundsPanel({ campaign, netBalance }: { campaign: Campaign; netBalan
   const sentAmount = payouts
     .filter(p => p.status === 'completed' || p.status === 'processing')
     .reduce((sum, p) => sum + parseFloat(p.gross_amount_usd), 0)
-  const displayBalance = netBalance - sentAmount
+  const baseBalance = campaign.campaign_type === 'political' && earnings
+    ? parseFloat(earnings.total_gross)
+    : netBalance
+  const displayBalance = baseBalance - sentAmount
 
   if (displayBalance <= 0 && payouts.length === 0) return null
 
@@ -430,6 +535,29 @@ function SendFundsPanel({ campaign, netBalance }: { campaign: Campaign; netBalan
           </div>
         )}
       </div>
+
+      {/* Fee breakdown — political campaigns, shown before initiating payout */}
+      {campaign.campaign_type === 'political' && earnings && parseFloat(earnings.total_gross) > 0 && (
+        <div className="mb-4 rounded-lg border border-gray-700 bg-gray-800 p-4 space-y-2">
+          <p className="text-xs font-semibold text-gray-300 mb-1">Fee breakdown</p>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Total raised</span>
+            <span className="text-white font-medium">{fmt(parseFloat(earnings.total_gross), campaign.currency)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Platform fee ({campaign.platform_fee_pct}%)</span>
+            <span className="text-gray-400">− {fmt(parseFloat(earnings.total_platform_fees), campaign.currency)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Processing fees (Stripe)</span>
+            <span className="text-gray-400">− {fmt(parseFloat(earnings.total_stripe_fees), campaign.currency)}</span>
+          </div>
+          <div className="flex justify-between text-xs border-t border-gray-700 pt-2">
+            <span className="text-white font-semibold">Net to campaign</span>
+            <span className="text-brand-300 font-semibold">{fmt(parseFloat(earnings.total_net), campaign.currency)}</span>
+          </div>
+        </div>
+      )}
 
       {/* Initiate payout form */}
       {open && (
@@ -526,7 +654,7 @@ function SendFundsPanel({ campaign, netBalance }: { campaign: Campaign; netBalan
 
 function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ display_name: '', story: '', location: '' })
+  const [form, setForm] = useState({ display_name: '', story: '', location: '', party_name: '', office_sought: '' })
   const [photo, setPhoto] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const qc = useQueryClient()
@@ -548,6 +676,8 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
       display_name: b?.display_name ?? '',
       story: b?.story ?? '',
       location: b?.location ?? '',
+      party_name: b?.party_name ?? '',
+      office_sought: b?.office_sought ?? '',
     })
     setPhotoPreview(b?.photo_url ?? null)
     setPhoto(null)
@@ -560,6 +690,8 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
       if (form.display_name) fd.append('display_name', form.display_name)
       if (form.story) fd.append('story', form.story)
       if (form.location) fd.append('location', form.location)
+      if (form.party_name) fd.append('party_name', form.party_name)
+      if (form.office_sought) fd.append('office_sought', form.office_sought)
       if (photo) fd.append('photo', photo)
       if (beneficiary) {
         await api.patch(`/campaigns/${campaign.slug}/beneficiary`, fd)
@@ -587,8 +719,13 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
 
   if (isLoading) return null
 
+  const pc = campaign.party_color ?? '#16a34a'
+
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+    <div
+      className={`rounded-xl border border-gray-800 bg-gray-900 p-6 ${isPolitical ? 'border-l-4' : ''}`}
+      style={isPolitical ? { borderLeftColor: pc } : undefined}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">
           {isPolitical ? 'Candidate / Party Profile' : 'Beneficiary Profile'}
@@ -636,10 +773,16 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
             }
           </div>
           <div className="flex-1 min-w-0">
-            <p className={isMemorial ? 'text-base font-bold text-white' : 'text-sm font-semibold text-white'}>
+            <p className={isPolitical ? 'text-lg font-bold text-white' : isMemorial ? 'text-base font-bold text-white' : 'text-sm font-semibold text-white'}>
               {beneficiary.display_name}
             </p>
-            {beneficiary.location && (
+            {isPolitical && beneficiary.party_name && (
+              <p className="text-xs mt-0.5 text-gray-400">🏛️ {beneficiary.party_name}</p>
+            )}
+            {isPolitical && beneficiary.office_sought && (
+              <p className="text-xs mt-0.5 text-gray-400">🗳️ {beneficiary.office_sought}</p>
+            )}
+            {!isPolitical && beneficiary.location && (
               <p className={`text-xs mt-0.5 ${isMemorial ? 'text-gray-300' : 'text-gray-400'}`}>
                 📍 {beneficiary.location}
               </p>
@@ -647,7 +790,9 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
             {beneficiary.story && (
               <p className={`text-xs mt-2 ${isMemorial
                 ? 'text-gray-200 border-t border-gray-700 pt-2'
-                : 'text-gray-500 line-clamp-2'}`}>
+                : isPolitical
+                  ? 'text-gray-300 leading-relaxed'
+                  : 'text-gray-500 line-clamp-2'}`}>
                 {beneficiary.story}
               </p>
             )}
@@ -685,18 +830,37 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
             className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
               text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
           />
-          <input
-            value={form.location}
-            onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
-            placeholder="Location (optional)"
-            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
-              text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
-          />
+          {isPolitical ? (
+            <>
+              <input
+                value={form.party_name}
+                onChange={e => setForm(p => ({ ...p, party_name: e.target.value }))}
+                placeholder="Party Name (optional)"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+              <input
+                value={form.office_sought}
+                onChange={e => setForm(p => ({ ...p, office_sought: e.target.value }))}
+                placeholder="Office Sought (optional)"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                  text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+              />
+            </>
+          ) : (
+            <input
+              value={form.location}
+              onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
+              placeholder="Location (optional)"
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
+                text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+            />
+          )}
           <textarea
             value={form.story}
             onChange={e => setForm(p => ({ ...p, story: e.target.value }))}
             rows={3}
-            maxLength={1000}
+            maxLength={isPolitical ? 5000 : 1000}
             placeholder="Story (optional)"
             className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5
               text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none resize-none"
@@ -734,6 +898,84 @@ function BeneficiaryCard({ campaign }: { campaign: Campaign }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Political hero card ───────────────────────────────────────────────────────
+
+function PoliticalHeroCard({
+  campaign,
+  beneficiary,
+  stats,
+}: {
+  campaign: Campaign
+  beneficiary: Beneficiary | null | undefined
+  stats: ReturnType<typeof computeStats>
+}) {
+  const pc = campaign.party_color ?? '#16a34a'
+
+  return (
+    <div
+      className="relative rounded-xl overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
+    >
+      {/* Party color radial tint */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at top, ${pc}22 0%, transparent 65%)` }}
+      />
+
+      <div className="relative p-6">
+        {beneficiary && (
+          <div className="flex flex-col items-center mb-5">
+            <div
+              className="h-28 w-28 rounded-full overflow-hidden border-4 bg-slate-700 mb-3 shadow-lg"
+              style={{ borderColor: pc, boxShadow: `0 8px 20px ${pc}33` }}
+            >
+              {beneficiary.photo_url
+                ? <img src={beneficiary.photo_url} alt={beneficiary.display_name} className="h-full w-full object-cover" />
+                : <div className="h-full w-full flex items-center justify-center text-4xl">🗳️</div>
+              }
+            </div>
+            <h2 className="text-xl font-bold text-white text-center leading-tight">{beneficiary.display_name}</h2>
+            {beneficiary.party_name && (
+              <p className="text-sm mt-1 text-center font-medium" style={{ color: pc }}>{beneficiary.party_name}</p>
+            )}
+            {beneficiary.office_sought && (
+              <p className="text-xs mt-0.5 text-center text-gray-400">{beneficiary.office_sought}</p>
+            )}
+          </div>
+        )}
+
+        <h1 className={`font-bold text-white text-center leading-tight mb-4 ${beneficiary ? 'text-base' : 'text-xl'}`}>
+          {campaign.title}
+        </h1>
+
+        <div className="bg-slate-800/70 rounded-xl p-4 border border-slate-700/60">
+          <p className="text-2xl font-bold tabular-nums text-center" style={{ color: pc }}>
+            {fmt(stats.totalRaised, campaign.currency)}
+          </p>
+          {stats.goalAmount != null ? (
+            <>
+              <p className="text-gray-400 text-sm text-center mt-1">
+                of {fmt(stats.goalAmount, campaign.currency)} goal
+              </p>
+              <div className="mt-3 h-2.5 w-full rounded-full bg-slate-700 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${Math.min(stats.progress, 100)}%`, backgroundColor: pc }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 text-right mt-1">{Math.round(stats.progress)}% funded</p>
+            </>
+          ) : (
+            <p className="text-gray-400 text-sm text-center mt-1">
+              raised so far · {stats.paidCount} supporter{stats.paidCount !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -175,6 +175,7 @@ async def public_campaign(slug: str, db: AsyncSession = Depends(get_db)):
         event_location=campaign.event_location,
         event_rsvp=campaign.event_rsvp,
         party_color=campaign.party_color,
+        platform_fee_pct=campaign.platform_fee_pct,
     )
 
 

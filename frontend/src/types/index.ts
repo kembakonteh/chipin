@@ -318,6 +318,8 @@ export interface Beneficiary {
   photo_url: string | null
   story: string | null
   location: string | null
+  party_name: string | null
+  office_sought: string | null
   created_at: string
 }
 

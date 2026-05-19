@@ -54,6 +54,7 @@ class PublicCampaignResponse(BaseModel):
     event_location: Optional[str] = None
     event_rsvp: Optional[str] = None
     party_color: Optional[str] = None
+    platform_fee_pct: Decimal = Decimal("2.00")
 
 
 class ManualPayRequest(BaseModel):

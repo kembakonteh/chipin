@@ -36,6 +36,7 @@ class Payment(Base, UUIDMixin, TimestampMixin):
     )
     stripe_checkout_session_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    stripe_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0"))
     platform_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     net_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")

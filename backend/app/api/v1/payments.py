@@ -81,8 +81,9 @@ async def initiate_payment(
         )
 
     is_anonymous = _resolve_is_anonymous(body.is_anonymous, campaign)
+    stripe_fee = (gross_amount * Decimal("0.029") + Decimal("0.30")).quantize(Decimal("0.01"))
     platform_fee = (gross_amount * campaign.platform_fee_pct / 100).quantize(Decimal("0.01"))
-    net_amount = gross_amount - platform_fee
+    net_amount = gross_amount - stripe_fee - platform_fee
 
     # Find or create Contributor by email
     existing = await db.execute(
@@ -130,7 +131,7 @@ async def initiate_payment(
 
     # Build Stripe Checkout Session params
     gross_cents = int(gross_amount * 100)
-    fee_cents = int(platform_fee * 100)
+    fee_cents = int(platform_fee * 100)  # application_fee is platform only; Stripe deducts its own fee
 
     session_params: dict = {
         "mode": "payment",
@@ -180,6 +181,7 @@ async def initiate_payment(
         stripe_payment_intent_id=None,  # set from webhook after checkout.session.completed
         stripe_checkout_session_id=session.id,
         gross_amount=gross_amount,
+        stripe_fee=stripe_fee,
         platform_fee=platform_fee,
         net_amount=net_amount,
         currency=campaign.currency,
@@ -292,7 +294,10 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
     gross_cents = session_obj.get("amount_total", 0)
     gross_amount = Decimal(gross_cents) / 100
 
-    # Re-derive fee using stored platform_fee (ratio preserved)
+    # Re-derive stripe_fee from the confirmed gross amount
+    stripe_fee = (gross_amount * Decimal("0.029") + Decimal("0.30")).quantize(Decimal("0.01"))
+
+    # Re-derive platform_fee using stored ratio (preserves per-campaign rate)
     if payment.gross_amount and payment.gross_amount > 0:
         fee_ratio = payment.platform_fee / payment.gross_amount
         platform_fee = (gross_amount * fee_ratio).quantize(Decimal("0.01"))
@@ -300,8 +305,9 @@ async def _handle_checkout_completed(session_obj: dict, db: AsyncSession, arq) -
         platform_fee = payment.platform_fee
 
     payment.gross_amount = gross_amount
+    payment.stripe_fee = stripe_fee
     payment.platform_fee = platform_fee
-    payment.net_amount = gross_amount - platform_fee
+    payment.net_amount = gross_amount - stripe_fee - platform_fee
     payment.status = PaymentStatus.succeeded
 
     # Mark contributor paid
@@ -493,11 +499,13 @@ async def campaign_earnings(
     payments = pay_result.scalars().all()
 
     total_gross = sum((p.gross_amount for p in payments), Decimal("0"))
+    total_stripe_fees = sum((p.stripe_fee for p in payments), Decimal("0"))
     total_fees = sum((p.platform_fee for p in payments), Decimal("0"))
     total_net = sum((p.net_amount for p in payments), Decimal("0"))
 
     return EarningsResponse(
         total_gross=total_gross,
+        total_stripe_fees=total_stripe_fees,
         total_platform_fees=total_fees,
         total_net=total_net,
         payment_count=len(payments),
